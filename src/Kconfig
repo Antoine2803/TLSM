@@ -1,0 +1,7 @@
+config SECURITY_TLSM
+        bool "TLSM Security Module"
+        depends on SECURITY
+        default y
+        help
+          TLSM is a student LSM Project for implementing a simple LSM into the 
+          Linux kernel. Made with lots of love (and sweat) by A&A
