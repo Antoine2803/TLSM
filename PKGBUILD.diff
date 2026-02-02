@@ -1,0 +1,92 @@
+diff --git a/PKGBUILD b/PKGBUILD
+index ee77260..35ad8f5 100644
+--- a/PKGBUILD
++++ b/PKGBUILD
+@@ -1,6 +1,6 @@
+ # Maintainer: Jan Alexander Steffens (heftig) <heftig@archlinux.org>
+ 
+-pkgbase=linux
++pkgbase=linux-tlsm
+ pkgver=6.18.7.arch1
+ pkgrel=1
+ pkgdesc='Linux'
+@@ -35,9 +35,10 @@ options=(
+ _srcname=linux-${pkgver%.*}
+ _srctag=v${pkgver%.*}-${pkgver##*.}
+ source=(
+-  https://cdn.kernel.org/pub/linux/kernel/v${pkgver%%.*}.x/${_srcname}.tar.{xz,sign}
+-  $url/releases/download/$_srctag/linux-$_srctag.patch.zst{,.sig}
++  https://cdn.kernel.org/pub/linux/kernel/v${pkgver%%.*}.x/${_srcname}.tar.xz
++  $url/releases/download/$_srctag/linux-$_srctag.patch.zst
+   config  # the main kernel config file
++  modprobed.db
+ )
+ validpgpkeys=(
+   ABAF11C65A2970B130ABE3C479BE3E4300411886  # Linus Torvalds
+@@ -46,15 +47,13 @@ validpgpkeys=(
+ )
+ # https://www.kernel.org/pub/linux/kernel/v6.x/sha256sums.asc
+ sha256sums=('b726a4d15cf9ae06219b56d87820776e34d89fbc137e55fb54a9b9c3015b8f1e'
+-            'SKIP'
+             '57c22879f2228398564091db2ec9b186acbd56dfb0e1072f83418bfdd3829aae'
+             'SKIP'
+-            '505d823490e964e66ebe5889a3701347b4e4e2faf1772b3964f0360a176eadf8')
++            'SKIP')
+ b2sums=('3ad31b9b36ea2c8f865c87e63c97a4e7b6684abee35ae71d5838026de9f476edb4c847adab315235293c5f37f8f3b90799ae2b3d41915716710eae63acbf6863'
+-        'SKIP'
+         '8ece2f1b2fc6530cdd65e597141550c184089a206b9aa49cb9e46d61d2e7cf9c3f07f35ed523670d892aa7e62626644a5b1e98dd9c6acd824cb7ad3254c17665'
+         'SKIP'
+-        'f31d83e1e10bb901d0d25c1db0ad2844584ff1014c8bf36f342fcf1999f41e5e2d5ddfa20a5a23d4626c6b35005c7e01ebe8ae7f3de3d4b61a189a49add3a158')
++        'SKIP')
+ 
+ export KBUILD_BUILD_HOST=archlinux
+ export KBUILD_BUILD_USER=$pkgbase
+@@ -80,7 +79,9 @@ prepare() {
+   echo "Setting config..."
+   cp ../config .config
+   make olddefconfig
+-  diff -u ../config .config || :
++  #diff -u ../config .config || :
++
++  make LSMOD=../modprobed.db localmodconfig
+ 
+   make -s kernelrelease > version
+   echo "Prepared $pkgbase version $(<version)"
+@@ -90,7 +91,7 @@ build() {
+   cd $_srcname
+   make all
+   make -C tools/bpf/bpftool vmlinux.h feature-clang-bpf-co-re=1
+-  make htmldocs SPHINXOPTS=-QT
++  #make htmldocs SPHINXOPTS=-QT
+ }
+ 
+ _package() {
+@@ -232,17 +233,17 @@ _package-docs() {
+   cd $_srcname
+   local builddir="$pkgdir/usr/lib/modules/$(<version)/build"
+ 
+-  echo "Installing documentation..."
+-  local src dst
+-  while read -rd '' src; do
+-    dst="${src#Documentation/}"
+-    dst="$builddir/Documentation/${dst#output/}"
+-    install -Dm644 "$src" "$dst"
+-  done < <(find Documentation -name '.*' -prune -o ! -type d -print0)
+-
+-  echo "Adding symlink..."
+-  mkdir -p "$pkgdir/usr/share/doc"
+-  ln -sr "$builddir/Documentation" "$pkgdir/usr/share/doc/$pkgbase"
++  # echo "Installing documentation..."
++  # local src dst
++  # while read -rd '' src; do
++  #   dst="${src#Documentation/}"
++  #   dst="$builddir/Documentation/${dst#output/}"
++  #   install -Dm644 "$src" "$dst"
++  # done < <(find Documentation -name '.*' -prune -o ! -type d -print0)
++
++  # echo "Adding symlink..."
++  # mkdir -p "$pkgdir/usr/share/doc"
++  # ln -sr "$builddir/Documentation" "$pkgdir/usr/share/doc/$pkgbase"
+ }
+ 
+ pkgname=(
