@@ -6,6 +6,7 @@ if [ ! -d "linux" ]; then
     git clone https://gitlab.archlinux.org/archlinux/packaging/packages/linux
     pushd linux || exit
     git checkout 6.18.7.arch1-1
+    rm -rf .git
     popd || exit
 fi
 
