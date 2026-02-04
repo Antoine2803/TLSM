@@ -11,7 +11,6 @@ if [ ! -d "linux" ]; then
 fi
 
 rm -f linux/tlsm.tar.gz
-rm -rf linux/src
 
 tar -czf linux/tlsm.tar.gz src --transform s/src/tlsm-src/
 cp config linux/config
@@ -21,5 +20,5 @@ cp Makefile.diff linux/Makefile.diff
 patch -N linux/PKGBUILD PKGBUILD.diff
 
 pushd linux || exit
-PKGEXT='.pkg.tar' makepkg -sf
+PKGEXT='.pkg.tar' makepkg -cf
 popd || exit

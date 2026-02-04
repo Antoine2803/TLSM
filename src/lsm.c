@@ -5,6 +5,8 @@
 #include <linux/module.h>
 #include <linux/dcache.h>
 
+#include "tlsm.h"
+
 static int mode = 0;
 module_param(mode, int, S_IRUGO);
 MODULE_PARM_DESC(mode, "TLSM mode");
