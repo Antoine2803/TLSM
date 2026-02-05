@@ -7,18 +7,19 @@
 #include <linux/delay.h>
 
 #include "tlsm.h"
+#include "utils.h"
 
 static int mode = 0;
 module_param(mode, int, S_IRUGO);
 MODULE_PARM_DESC(mode, "TLSM mode");
 
-static int count = 0;
+struct plist *tlsm_policies;
 
 static int log_open(struct file *f)
 {
 	kuid_t uid;
 	const int buflen = 256;
-	char buf[buflen];
+	char buf[256];
 	char comm[TASK_COMM_LEN];
 	char exe_buf[256];
 	char *exe_path = "unknown";
@@ -26,7 +27,7 @@ static int log_open(struct file *f)
 	struct task_struct *curr = get_current();
 
 	uid = current_uid();
-	struct inode *inode = file_inode(f);
+	// struct inode *inode = file_inode(f);
 	char *res = d_path(&f->f_path, buf, buflen);
 
 	get_task_comm(comm, curr);
@@ -43,28 +44,21 @@ static int log_open(struct file *f)
 	if (IS_ERR(res))
 		res = "unknown";
 
-	if (strstr(res, "/home/") != NULL)
-	{
-		count++;
-		printk(KERN_DEBUG
-			   "[TLSM] (%d) pid=%d uid=%d comm=%s exe=%s accessing %s (inode=%ld)\n",
-			   count,
-			   task_tgid_nr(current),
-			   __kuid_val(uid),
-			   comm,
-			   exe_path,
-			   res,
-			   inode->i_ino);
+	struct policy_node *tmp = tlsm_policies->head;
 
-		if ((strstr(comm, "cat") != NULL) && (strstr(res, "test.txt") != NULL))
+	while (tmp)
+	{
+		if (tmp->policy->type == 0)
 		{
-			ssleep(5);
-			return 0;
+			if (strstr(exe_path, tmp->policy->subject) != NULL)
+			{
+				if(strstr(res, tmp->policy->object) != NULL) {
+					printk(KERN_DEBUG "[TLSM][FS][BLOCK] blocking %s access to %s", exe_path, res);
+					return 1;
+				}
+			}
 		}
-		if ((strstr(comm, "ls") != NULL) && (strstr(res, "image") != NULL))
-		{
-			return 1;
-		}
+		tmp = tmp->next;
 	}
 
 	return 0;
@@ -83,6 +77,11 @@ static int __init tlsm_init(void)
 {
 	security_add_hooks(hooks, ARRAY_SIZE(hooks), &tlsm_lsmid);
 	printk(KERN_INFO "TLSM: loaded with mode %d", mode);
+	tlsm_policies = tlsm_plist_new();
+	if (!tlsm_policies)
+	{
+		printk(KERN_ERR "TLSM: failed to init policies ! TODO: remove hooks on init failure");
+	}
 	return 0;
 }
 
