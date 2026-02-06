@@ -1,6 +1,7 @@
 #include <linux/string.h>
 
 #include "utils.h"
+#include "common.h"
 #include "tlsm.h"
 
 /**
@@ -119,21 +120,20 @@ strip_fail:
 /**
  * parse_policy - Parse a tlsm policy
  *
- * Return: the parsed policy
+ * Return: the parsed policy in newly *allocated memory*
+ *         NULL on failure
  */
 struct policy *parse_policy(char *rule)
 {
     int word_count;
     char **words = str_split(rule, ' ', &word_count);
-    printk(KERN_DEBUG "[TLSM][NEW_RULE] %d mots", word_count);
 
     if (words)
     {
         int i;
         for (i = 0; *(words + i); i++)
         {
-            printk(KERN_DEBUG "[TLSM][WORD] mot=%s", *(words + i));
-            if (i != 1 && i != 2)
+            if (i >= 3)
             {
                 kfree(*(words + i));
             }
@@ -142,7 +142,18 @@ struct policy *parse_policy(char *rule)
 
     struct policy *new_policy;
     new_policy = kmalloc(sizeof(*new_policy), GFP_KERNEL);
-    new_policy->type = 0;
+    if (!new_policy)
+        return NULL;
+    new_policy->category = TLSM_FILE;
+
+    tlsm_ops_t op = str2tlsm_ops(words[0]);
+    if (op == TLSM_OP_UNDEFINED)
+    {
+        printk(KERN_ERR "[TLSM][ERREUR] cannot parse operation %s", words[0]);
+        return NULL;
+    }
+
+    new_policy->op = op;
     new_policy->subject = words[1];
     new_policy->object = words[2];
 
@@ -265,7 +276,7 @@ void plist_debug(struct plist *l)
     struct policy_node *tmp = l->head;
     while (tmp)
     {
-        printk(KERN_DEBUG "[LIST_DEBUG] type=%d, subject=%s, object=%s", tmp->policy->type, tmp->policy->subject, tmp->policy->object);
+        printk(KERN_DEBUG "[TLSM][LIST_DEBUG] type=%d, subject=%s, object=%s", tmp->policy->op, tmp->policy->subject, tmp->policy->object);
         tmp = tmp->next;
     }
 }

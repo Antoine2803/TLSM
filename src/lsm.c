@@ -15,7 +15,7 @@ MODULE_PARM_DESC(mode, "TLSM mode");
 
 struct plist *tlsm_policies;
 
-static int log_open(struct file *f)
+static int tlsm_hook_open(struct file *f)
 {
 	kuid_t uid;
 	const int buflen = 256;
@@ -27,7 +27,6 @@ static int log_open(struct file *f)
 	struct task_struct *curr = get_current();
 
 	uid = current_uid();
-	// struct inode *inode = file_inode(f);
 	char *res = d_path(&f->f_path, buf, buflen);
 
 	get_task_comm(comm, curr);
@@ -48,11 +47,12 @@ static int log_open(struct file *f)
 
 	while (tmp)
 	{
-		if (tmp->policy->type == 0)
+		if (tmp->policy->op == TLSM_FILE_OPEN)
 		{
-			if (strstr(exe_path, tmp->policy->subject) != NULL)
+			if (strncmp(comm, tmp->policy->subject, strlen(tmp->policy->subject)) == 0)
 			{
-				if(strstr(res, tmp->policy->object) != NULL) {
+				if (strncmp(res, tmp->policy->object, strlen(tmp->policy->object)) == 0)
+				{
 					printk(KERN_DEBUG "[TLSM][FS][BLOCK] blocking %s access to %s", exe_path, res);
 					return 1;
 				}
@@ -65,7 +65,7 @@ static int log_open(struct file *f)
 }
 
 static struct security_hook_list hooks[] __ro_after_init = {
-	LSM_HOOK_INIT(file_open, log_open),
+	LSM_HOOK_INIT(file_open, tlsm_hook_open),
 };
 
 static const struct lsm_id tlsm_lsmid = {
@@ -76,11 +76,11 @@ static const struct lsm_id tlsm_lsmid = {
 static int __init tlsm_init(void)
 {
 	security_add_hooks(hooks, ARRAY_SIZE(hooks), &tlsm_lsmid);
-	printk(KERN_INFO "TLSM: loaded with mode %d", mode);
+	printk(KERN_INFO "[TLSM] loaded with mode %d", mode);
 	tlsm_policies = tlsm_plist_new();
 	if (!tlsm_policies)
 	{
-		printk(KERN_ERR "TLSM: failed to init policies ! TODO: remove hooks on init failure");
+		printk(KERN_ERR "[TLSM] failed to init policies ! TODO: remove hooks on init failure");
 	}
 	return 0;
 }

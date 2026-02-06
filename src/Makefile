@@ -3,4 +3,4 @@
 #
 
 obj-$(CONFIG_SECURITY_TLSM) += tlsm.o 
-tlsm-y := lsm.o fs.o utils.o
+tlsm-y := lsm.o fs.o utils.o common.o

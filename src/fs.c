@@ -5,6 +5,7 @@
 
 #include "tlsm.h"
 #include "utils.h"
+#include "common.h"
 
 static ssize_t tlsm_read(struct file *file, char __user *buf,
 						 size_t count, loff_t *ppos)
@@ -28,7 +29,7 @@ static ssize_t tlsm_read(struct file *file, char __user *buf,
 		while (curr && count - pos)
 		{
 			struct policy *p = curr->policy;
-			int j = scnprintf(&kbuf[pos], count - pos, "rule #%d : %d %s %s\n", i, p->type, p->subject, p->object);
+			int j = scnprintf(&kbuf[pos], count - pos, "rule #%d : %s %s %s\n", i, tlsm_ops2str(p->op), p->subject, p->object);
 			rlen += j;
 			pos += j;
 			i++;
@@ -73,9 +74,20 @@ static ssize_t tlsm_write(struct file *file, const char __user *buf,
 	if (strncmp((const char *)&file->f_path.dentry->d_iname, "add_policy", 10) == 0 && strlen((const char *)&file->f_path.dentry->d_iname) == 10)
 	{
 		printk(KERN_DEBUG "[TLSM][ADD_RULE] %s.", state);
-		int res = tlsm_plist_add(tlsm_policies, parse_policy(state));
 
-		printk(KERN_DEBUG "[TLSM][FINISHED] 0=%d", res);
+		struct policy *p = parse_policy(state);
+
+		if (p == NULL)
+		{
+			printk(KERN_ERR "[TLSM][ERROR] cannot create policy");
+		}
+		else
+		{
+			int res = tlsm_plist_add(tlsm_policies, p);
+
+			if (res != 0)
+				printk(KERN_ERR "[TLSM][ERROR] cannot add new rule");
+		}
 	}
 
 	kfree(state);

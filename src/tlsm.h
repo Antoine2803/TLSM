@@ -4,9 +4,11 @@
 #include <linux/errno.h>
 #include <linux/mm.h>
 
+#include "common.h"
 
 struct policy {
-    short int type;
+    tlsm_category_t category;
+    tlsm_ops_t op;
     char* subject;
     char* object;
 };
@@ -21,6 +23,15 @@ struct policy_node {
     struct policy* policy;
 };
 
-extern struct plist* tlsm_policies;
+struct tlsm_request {
+    tlsm_category_t category; // indicates the general cate
+    tlsm_ops_t op;
+    char* object;
+    char* subject;
+};
+
+extern struct plist* tlsm_policies; // linked list of active policies
+
+
 
 #endif /* _TLSM_H */
