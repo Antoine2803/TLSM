@@ -56,11 +56,13 @@ dkms.conf
 
 
 # CUSTOM
+*.tar*
 linux/
 linux/*
 *.qcow2
 .vscode
 build.log
 build.err
-linux-6.18.8
+linux-6.*
 .vsls.json
+tools/build

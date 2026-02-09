@@ -1,5 +1,6 @@
 #!/usr/bin/bash
 
+echo "==== Building Linux-TLSM ===="
 
 if [ ! -d "linux" ]; then
     echo -e "Downloading vanilla arch kernel pkg"
@@ -20,5 +21,11 @@ cp Makefile.diff linux/Makefile.diff
 patch -N linux/PKGBUILD PKGBUILD.diff
 
 pushd linux || exit
-PKGEXT='.pkg.tar' makepkg -cf
+PKGEXT='.pkg.tar' PKGDEST=".." makepkg -cf
 popd || exit
+
+echo "==== Building TLSM Userland Tools ===="
+pushd tools || exit
+source build.sh
+popd || exit
+echo "==== DONE ===="

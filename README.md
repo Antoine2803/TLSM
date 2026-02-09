@@ -8,9 +8,10 @@ Usage: `./vm.sh <base?> <reset>`
 
 ## Build
 Downloads the ArchLinux's default kernel and applies patches to inject TLSM, then builds arch packages.
+Also builds the userland tools.
 `time ./build.sh > >(tee build.log) 2> >(tee build.err >&2)`
 
 ## Install
-Install our kernels to a running VM.
+Install our kernels and userland tools to a running VM.
 `./install.sh`
 
