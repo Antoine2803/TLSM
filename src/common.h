@@ -14,9 +14,8 @@ typedef enum tlsm_ops
 {
     TLSM_OP_UNDEFINED,
     TLSM_FILE_OPEN,
-    TLSM_FILE_WRITE,
-    TLSM_FILE_READ,
-    TLSM_FILE_RM,
+    TLSM_SOCKET_BIND,
+    TLSM_SOCKET_CONNECT
 } tlsm_ops_t;
 
 static const struct {
@@ -25,9 +24,8 @@ static const struct {
 } op2str [] = {
     {TLSM_OP_UNDEFINED, "undefined"},
     {TLSM_FILE_OPEN, "open"},
-    {TLSM_FILE_WRITE, "write"},
-    {TLSM_FILE_READ, "read"},
-    {TLSM_FILE_RM, "rm"},
+    {TLSM_SOCKET_BIND, "bind"},
+    {TLSM_SOCKET_CONNECT, "connect"},
 };
 
 const char* tlsm_ops2str(tlsm_ops_t op);

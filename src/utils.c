@@ -42,6 +42,12 @@ char **str_split(char *string, const char delimiter, int *out_count)
 {
     if (!string || !out_count)
         return NULL;
+
+    // Remove trailing '\n'
+    int len = strlen(string);
+    if (*(string + len - 1) == '\n')
+        *(string + len - 1) = '\0';
+
     char **res = 0;
     size_t i = 0;
     int count = 0;
@@ -100,7 +106,7 @@ char **str_split(char *string, const char delimiter, int *out_count)
     }
     if (last_delim != i - 1)
     {
-        word = str_strip(string, last_delim + 1, i - 1);
+        word = str_strip(string, last_delim + 1, i);
         if (!word)
             goto strip_fail;
         *res_cpy = word;
@@ -118,6 +124,31 @@ strip_fail:
 }
 
 /**
+ * free_karray_from - free an array from the element start, (if start=0 also free the array pointer)
+ */
+void free_karray_from(char **array, int start, int len)
+{
+    if (array)
+    {
+        int i;
+        for (i = 0; i < len; i++)
+        {
+            if (i >= start)
+            {
+                if (*(array + i))
+                {
+                    kfree(*(array + i));
+                }
+            }
+        }
+    }
+    if (start == 0)
+    {
+        kfree(array);
+    }
+}
+
+/**
  * parse_policy - Parse a tlsm policy
  *
  * Return: the parsed policy in newly *allocated memory*
@@ -128,38 +159,58 @@ struct policy *parse_policy(char *rule)
     int word_count;
     char **words = str_split(rule, ' ', &word_count);
 
-    if (words)
-    {
-        int i;
-        for (i = 0; *(words + i); i++)
-        {
-            if (i >= 3)
-            {
-                kfree(*(words + i));
-            }
-        }
-    }
+    if (!words)
+        return NULL;
 
     struct policy *new_policy;
     new_policy = kmalloc(sizeof(*new_policy), GFP_KERNEL);
-    if (!new_policy)
-        return NULL;
-    new_policy->category = TLSM_FILE;
+
+    if (!new_policy || word_count < 3)
+        goto parse_policy_fail;
 
     tlsm_ops_t op = str2tlsm_ops(words[0]);
     if (op == TLSM_OP_UNDEFINED)
     {
         printk(KERN_ERR "[TLSM][ERREUR] cannot parse operation %s", words[0]);
-        return NULL;
+        goto parse_policy_fail;
     }
 
-    new_policy->op = op;
-    new_policy->subject = words[1];
-    new_policy->object = words[2];
+    if (op == TLSM_FILE_OPEN)
+    {
+        new_policy->op = op;
+        new_policy->subject = words[1];
+        new_policy->object = words[2];
+        free_karray_from(words, 3, word_count);
+    }
+    else if (op > TLSM_FILE_OPEN)
+    {
+        if (word_count < 4)
+            goto parse_policy_fail;
+
+        int type;
+        int res = kstrtoint(words[3], 10, &type);
+
+        if (res != 0)
+        {
+            goto parse_policy_fail;
+        }
+
+        new_policy->op = op;
+        new_policy->subject = words[1];
+        new_policy->object = words[2];
+        new_policy->object_type = type;
+        free_karray_from(words, 3, word_count);
+    }
 
     kfree(words);
 
     return new_policy;
+
+parse_policy_fail:
+    if (new_policy)
+        kfree(new_policy);
+    free_karray_from(words, 0, word_count);
+    return NULL;
 }
 
 /**

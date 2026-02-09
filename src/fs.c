@@ -29,7 +29,15 @@ static ssize_t tlsm_read(struct file *file, char __user *buf,
 		while (curr && count - pos)
 		{
 			struct policy *p = curr->policy;
-			int j = scnprintf(&kbuf[pos], count - pos, "rule #%d : %s %s %s\n", i, tlsm_ops2str(p->op), p->subject, p->object);
+			int j;
+			if (p->op > TLSM_FILE_OPEN)
+			{
+				j = scnprintf(&kbuf[pos], count - pos, "rule #%d : %s %s %s %d\n", i, tlsm_ops2str(p->op), p->subject, p->object, p->object_type);
+			}
+			else
+			{
+				j = scnprintf(&kbuf[pos], count - pos, "rule #%d : %s %s %s\n", i, tlsm_ops2str(p->op), p->subject, p->object);
+			}
 			rlen += j;
 			pos += j;
 			i++;

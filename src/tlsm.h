@@ -7,10 +7,10 @@
 #include "common.h"
 
 struct policy {
-    tlsm_category_t category;
     tlsm_ops_t op;
     char* subject;
     char* object;
+    int object_type;
 };
 
 struct plist {
@@ -24,7 +24,6 @@ struct policy_node {
 };
 
 struct tlsm_request {
-    tlsm_category_t category; // indicates the general cate
     tlsm_ops_t op;
     char* object;
     char* subject;
