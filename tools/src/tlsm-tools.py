@@ -30,10 +30,18 @@ def apply_policies():
     print("Loading policies from", policies_path)
     try:
         policies = open(policies_path, "r")
+        program = None
         for i in policies.readlines():
-            if i[0] == "@":
-                pol = i[1:]
-                add_policy(pol)
+            try:
+                i = i.rstrip(" \n")
+                lt = i[0]
+                lh = i[1:]
+                if lt == "@":
+                    program = lh
+                elif lt == "=":
+                    add_policy(program + " " + lh)
+            except IndexError:
+                pass
         policies.close()
     except OSError:
         print("Failed to open", policies_path)
