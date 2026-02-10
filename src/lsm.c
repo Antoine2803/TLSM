@@ -17,8 +17,18 @@ static int mode = 0;
 module_param(mode, int, S_IRUGO);
 MODULE_PARM_DESC(mode, "TLSM mode");
 
+struct lsm_blob_sizes tlsm_blob_sizes __ro_after_init = {
+	.lbs_task = sizeof(struct tlsm_task_security),
+};
+
+inline struct tlsm_task_security* get_task_security(struct task_struct* ts) {
+    return ts->security + tlsm_blob_sizes.lbs_task;
+};
+
 struct plist *tlsm_policies;
 
+/* TLSM Operation hooks */
+/* these hooks are called on operations */
 static int tlsm_hook_open(struct file *f)
 {
 	kuid_t uid;
@@ -27,8 +37,8 @@ static int tlsm_hook_open(struct file *f)
 	char comm[TASK_COMM_LEN];
 	char exe_buf[256];
 	char *exe_path = "unknown";
-
 	struct task_struct *curr = get_current();
+	struct tlsm_task_security* ts = get_task_security(curr);
 
 	uid = current_uid();
 	char *res = d_path(&f->f_path, buf, buflen);
@@ -56,9 +66,11 @@ static int tlsm_hook_open(struct file *f)
 			{
 				if (strncmp(res, tmp->policy->object, strlen(tmp->policy->object)) == 0)
 				{
-					printk(KERN_DEBUG "[TLSM][FS][BLOCK] blocking %s access to %s", exe_path, res);
+					ts->hit_count++;
+					printk(KERN_DEBUG "[TLSM][FS][BLOCK] blocking %s access to %s (%d block op)", exe_path, res, ts->hit_count);
+
 					return 1;
-				}
+				}	
 			}
 		}
 		tmp = tmp->next;
@@ -209,10 +221,24 @@ static int tlsm_hook_sconnect(struct socket *sock, struct sockaddr *address, int
 	return 0;
 }
 
+/* TLSM security hooks */
+/* these hooks handle the allocation and destruction 
+ *of the opaque security struct */
+
+static int tlsm_task_allocate(struct task_struct *task, u64 clone_flags) {
+	return 0;
+}
+
+static void tlsm_task_free(struct task_struct *task) {
+}
+
 static struct security_hook_list hooks[] __ro_after_init = {
 	LSM_HOOK_INIT(file_open, tlsm_hook_open),
 	LSM_HOOK_INIT(socket_bind, tlsm_hook_sbind),
 	LSM_HOOK_INIT(socket_connect, tlsm_hook_sconnect),
+	
+	LSM_HOOK_INIT(task_alloc, tlsm_task_allocate),
+	LSM_HOOK_INIT(task_free, tlsm_task_free),
 };
 
 static const struct lsm_id tlsm_lsmid = {
@@ -235,4 +261,5 @@ static int __init tlsm_init(void)
 DEFINE_LSM(tlsm) = {
 	.name = "tlsm",
 	.init = tlsm_init,
+	.blobs = &tlsm_blob_sizes,
 };

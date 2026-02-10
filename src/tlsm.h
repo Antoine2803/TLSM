@@ -29,8 +29,15 @@ struct tlsm_request {
     char* subject;
 };
 
-extern struct plist* tlsm_policies; // linked list of active policies
+extern struct lsm_blob_sizes tlsm_blob_sizes;
+inline struct tlsm_task_security* get_task_security(struct task_struct* ts);
 
+struct tlsm_task_security {
+    /* when changing this struct, adjust tlsm_task_alloc et tlsm_task_free accordingly */
+    int hit_count;
+};
+
+extern struct plist* tlsm_policies; // linked list of active policies
 
 
 #endif /* _TLSM_H */
