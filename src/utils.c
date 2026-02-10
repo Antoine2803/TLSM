@@ -279,6 +279,49 @@ int tlsm_plist_add(struct plist *plist, struct policy *policy)
 }
 
 /**
+ * tlsm_plist_del - removes a policy from the policy list
+ */
+int tlsm_plist_del(struct plist *plist, int index)
+{
+
+    int curr_i = 0;
+    struct policy_node *curr = plist->head;
+    struct policy_node *prev = NULL;
+
+    // iterate until the target node to remove
+    while (curr && curr_i < index)
+    {
+        curr_i++;
+        prev = curr;
+        curr = curr->next;
+    }
+
+    if (curr_i == index)
+    {
+        if (curr) // if the node actually exists
+        {
+            if (prev) // if curr is node the firs node of the list
+            { // curr is not the head
+                prev->next = curr->next;
+                if (curr->next == NULL)
+                    plist->tail = prev;
+            }
+            else
+            { // curr is the head / first node of the list
+                plist->head = curr->next;
+                if (plist->tail == curr) // if curr was the only node 
+                    plist->tail = NULL; 
+            }
+            kfree(curr);
+            return 0;
+        }
+        // curr = tail->next, nothing to do
+    }
+    // else : failed to find target node
+    return -1;
+}
+
+/**
  * tlsm_plist_free - Frees a policy list
  */
 void tlsm_plist_free(struct plist *plist)

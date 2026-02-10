@@ -89,6 +89,30 @@ static ssize_t tlsm_write(struct file *file, const char __user *buf,
 				printk(KERN_ERR "[TLSM][ERROR] cannot add new rule");
 		}
 	}
+	else if (strncmp((const char *)&file->f_path.dentry->d_iname, "del_policy", 10) == 0 && strlen((const char *)&file->f_path.dentry->d_iname) == 10)
+	{
+		int target;
+
+		// Remove trailing '\n'
+		int len = strlen(state);
+		if ((state + len - 1) == '\n')
+			*(state + len - 1) = '\0';
+
+		if (kstrtoint(state, 10, &target) == 0)
+		{
+			if (tlsm_plist_del(tlsm_policies, target) != 0) {
+				printk(KERN_ERR "[TLSM][FS] no existing rule at index %d", target);
+			}
+		}
+		else
+		{
+			printk(KERN_ERR "[TLSM][FS] failed to parse policy index, error %d", ret);
+		}
+	}
+	else
+	{
+		printk(KERN_ERR "[TLSM][FS] error, unsupported write op %s", res);
+	}
 
 	kfree(state);
 	return count;
@@ -109,6 +133,7 @@ static int tlsm_interface_init(void)
 	struct dentry *tlsm_fs_root = securityfs_create_dir("tlsm", NULL);
 	printk(KERN_DEBUG "[TLSM] fs created");
 	securityfs_create_file("add_policy", 0666, tlsm_fs_root, NULL, &tlsm_ops);
+	securityfs_create_file("del_policy", 0666, tlsm_fs_root, NULL, &tlsm_ops);
 	securityfs_create_file("list_policies", 0666, tlsm_fs_root, NULL, &tlsm_ops);
 	return 0;
 }

@@ -10,7 +10,8 @@ POLICIES_DB="policies.conf"
 policies_path = join(MAIN_FOLDER, POLICIES_DB)
 
 SYSFS_ROOT = "/sys/kernel/security/tlsm/"
-SYSFS_ADDPOLICY = join(SYSFS_ROOT, "add_policy")
+SYSFS_ADD = join(SYSFS_ROOT, "add_policy")
+SYSFS_DEL = join(SYSFS_ROOT, "del_policy")
 SYSFS_LIST = join(SYSFS_ROOT, "list_policies")
 
 def create_folders():
@@ -18,12 +19,23 @@ def create_folders():
 
 def add_policy(policy: str):
     try:
-        f = open(SYSFS_ADDPOLICY, "w")
+        f = open(SYSFS_ADD, "w")
         print("Installing policy :", policy)
         f.write(policy)
         f.close()
     except OSError:
-        print("Failed to open", SYSFS_ADDPOLICY, " - Is TLSM loaded ?")
+        print("Failed to open", SYSFS_ADD, " - Is TLSM loaded ?")
+        return -1
+
+def remove_policy(index: int):
+    assert(index >= 0)
+    try:
+        f = open(SYSFS_DEL, "w")
+        print("Removing policy at index :", index)
+        f.write(str(index))
+        f.close()
+    except OSError:
+        print("Failed to open", SYSFS_ADD, " - Is TLSM loaded ?")
         return -1
 
 def apply_policies():
@@ -54,7 +66,7 @@ def list_policies():
     f.close()
 
 def print_help():
-    print("usage: tlsm-py [ apply | list | add \"<policy>\"]")
+    print("usage: tlsm-py [ apply | list | add \"<policy>\" | del <index> ]")
     print("Policy example : cat open /home/user/secret.txt")
     print("Policy example : python bind 192.168.1.1")
 
@@ -69,6 +81,12 @@ if __name__=="__main__":
             if len(argv) == 3:
                 pol = argv[2]
                 add_policy(pol)
+            else:
+                print_help()
+        elif argv[1] == "del":
+            if len(argv) == 3:
+                index = int(argv[2])
+                remove_policy(index)
             else:
                 print_help()
         else:
