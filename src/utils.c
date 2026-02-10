@@ -164,43 +164,23 @@ struct policy *parse_policy(char *rule)
 
     struct policy *new_policy;
     new_policy = kmalloc(sizeof(*new_policy), GFP_KERNEL);
+    new_policy->hit_count = 0;
 
     if (!new_policy || word_count < 3)
         goto parse_policy_fail;
 
-    tlsm_ops_t op = str2tlsm_ops(words[0]);
+    tlsm_ops_t op = str2tlsm_ops(words[1]);
     if (op == TLSM_OP_UNDEFINED)
     {
         printk(KERN_ERR "[TLSM][ERREUR] cannot parse operation %s", words[0]);
         goto parse_policy_fail;
     }
+    kfree(words[1]);
 
-    if (op == TLSM_FILE_OPEN)
-    {
-        new_policy->op = op;
-        new_policy->subject = words[1];
-        new_policy->object = words[2];
-        free_karray_from(words, 3, word_count);
-    }
-    else if (op > TLSM_FILE_OPEN)
-    {
-        if (word_count < 4)
-            goto parse_policy_fail;
-
-        int type;
-        int res = kstrtoint(words[3], 10, &type);
-
-        if (res != 0)
-        {
-            goto parse_policy_fail;
-        }
-
-        new_policy->op = op;
-        new_policy->subject = words[1];
-        new_policy->object = words[2];
-        new_policy->object_type = type;
-        free_karray_from(words, 3, word_count);
-    }
+    new_policy->subject = words[0];
+    new_policy->op = op;
+    new_policy->object = words[2];
+    free_karray_from(words, 3, word_count);
 
     kfree(words);
 

@@ -47,7 +47,8 @@ def list_policies():
 
 def print_help():
     print("usage: tlsm-py [ apply | list | add \"<policy>\"]")
-    print("Policy example : open cat /home/user/secret.txt")
+    print("Policy example : cat open /home/user/secret.txt")
+    print("Policy example : python bind 192.168.1.1")
 
 if __name__=="__main__":
     print("tlsm-tools - userland configuration utility for TLSM")

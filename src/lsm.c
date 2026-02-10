@@ -12,6 +12,7 @@
 
 #include "tlsm.h"
 #include "utils.h"
+#include "access.h"
 
 static int mode = 0;
 module_param(mode, int, S_IRUGO);
@@ -21,8 +22,9 @@ struct lsm_blob_sizes tlsm_blob_sizes __ro_after_init = {
 	.lbs_task = sizeof(struct tlsm_task_security),
 };
 
-inline struct tlsm_task_security* get_task_security(struct task_struct* ts) {
-    return ts->security + tlsm_blob_sizes.lbs_task;
+inline struct tlsm_task_security *get_task_security(struct task_struct *ts)
+{
+	return ts->security + tlsm_blob_sizes.lbs_task;
 };
 
 struct plist *tlsm_policies;
@@ -31,212 +33,80 @@ struct plist *tlsm_policies;
 /* these hooks are called on operations */
 static int tlsm_hook_open(struct file *f)
 {
-	kuid_t uid;
 	const int buflen = 256;
 	char buf[256];
-	char comm[TASK_COMM_LEN];
-	char exe_buf[256];
-	char *exe_path = "unknown";
-	struct task_struct *curr = get_current();
-	struct tlsm_task_security* ts = get_task_security(curr);
 
-	uid = current_uid();
 	char *res = d_path(&f->f_path, buf, buflen);
 
-	get_task_comm(comm, curr);
+	struct access_t access_request;
+	access_request.op = TLSM_FILE_OPEN;
+	access_request.object = res;
 
-	struct file *exe_file = get_task_exe_file(curr);
-	if (exe_file)
+	return autorize_access(access_request);
+}
+
+static int __tlsm_hook_socket(struct socket *sock, struct sockaddr *address, int addrlen, tlsm_ops_t sock_op)
+{
+	char ip[48];
+	struct access_t access_request;
+	access_request.op = sock_op;
+
+	switch (address->sa_family)
 	{
-		char *tmp = d_path(&exe_file->f_path, exe_buf, sizeof(exe_buf));
-		if (!IS_ERR(tmp))
-			exe_path = tmp;
+	case AF_UNIX:
+		struct sockaddr_un *addr_un = (struct sockaddr_un *)address;
+		access_request.object = addr_un->sun_path;
+		break;
+
+	case AF_INET:
+		struct sockaddr_in *addr4 = (struct sockaddr_in *)address;
+		snprintf(ip, sizeof(ip), "%pI4", &addr4->sin_addr);
+		access_request.object = ip;
+		break;
+
+	case AF_INET6:
+		struct sockaddr_in6 *addr6 = (struct sockaddr_in6 *)address;
+		snprintf(ip, sizeof(ip), "%pI6", &addr6->sin6_addr);
+		access_request.object = ip;
+		break;
+
+	default:
+		break;
 	}
 
-	if (IS_ERR(res))
-		res = "unknown";
-
-	struct policy_node *tmp = tlsm_policies->head;
-
-	while (tmp)
-	{
-		if (tmp->policy->op == TLSM_FILE_OPEN)
-		{
-			if (strncmp(comm, tmp->policy->subject, strlen(tmp->policy->subject)) == 0)
-			{
-				if (strncmp(res, tmp->policy->object, strlen(tmp->policy->object)) == 0)
-				{
-					ts->hit_count++;
-					printk(KERN_DEBUG "[TLSM][FS][BLOCK] blocking %s access to %s (%d block op)", exe_path, res, ts->hit_count);
-
-					return 1;
-				}	
-			}
-		}
-		tmp = tmp->next;
-	}
-
-	return 0;
+	return autorize_access(access_request);
 }
 
 static int tlsm_hook_sbind(struct socket *sock, struct sockaddr *address, int addrlen)
 {
-	kuid_t uid;
-	char comm[TASK_COMM_LEN];
-	char exe_buf[256];
-	char *exe_path = "unknown";
-
-	struct task_struct *curr = get_current();
-
-	uid = current_uid();
-
-	get_task_comm(comm, curr);
-
-	struct file *exe_file = get_task_exe_file(curr);
-	if (exe_file)
-	{
-		char *tmp = d_path(&exe_file->f_path, exe_buf, sizeof(exe_buf));
-		if (!IS_ERR(tmp))
-			exe_path = tmp;
-	}
-
-	struct policy_node *tmp = tlsm_policies->head;
-
-	while (tmp)
-	{
-		if (tmp->policy->op == TLSM_SOCKET_BIND)
-		{
-			if (strncmp(comm, tmp->policy->subject, strlen(tmp->policy->subject)) == 0)
-			{
-				if (tmp->policy->object_type == AF_INET)
-				{
-					struct sockaddr_in *addr4 = (struct sockaddr_in *)address;
-					char ip[16];
-					snprintf(ip, sizeof(ip), "%pI4", &addr4->sin_addr);
-
-					if (strcmp(ip, tmp->policy->object) == 0)
-					{
-						printk(KERN_DEBUG "[TLSM][SOCK][BLOCK] blocking %s bind to %s", exe_path, ip);
-						return 1;
-					}
-				}
-				if (tmp->policy->object_type == AF_INET6)
-				{
-					struct sockaddr_in6 *addr6 = (struct sockaddr_in6 *)address;
-					char ip[48];
-					snprintf(ip, sizeof(ip), "%pI6", &addr6->sin6_addr);
-
-					if (strcmp(ip, tmp->policy->object) == 0)
-					{
-						printk(KERN_DEBUG "[TLSM][SOCK][BLOCK] blocking %s bind to %s", exe_path, ip);
-						return 1;
-					}
-				}
-				if (address->sa_family == AF_UNIX)
-				{
-					struct sockaddr_un *addr_un = (struct sockaddr_un *)address;
-
-					if (strcmp(addr_un->sun_path, tmp->policy->object) == 0)
-					{
-						printk(KERN_DEBUG "[TLSM][SOCK][BLOCK] blocking %s bind to %s", exe_path, addr_un->sun_path);
-						return 1;
-					}
-				}
-			}
-		}
-		tmp = tmp->next;
-	}
-
-	return 0;
+	return __tlsm_hook_socket(sock, address, addrlen, TLSM_SOCKET_BIND);
 }
 
 static int tlsm_hook_sconnect(struct socket *sock, struct sockaddr *address, int addrlen)
 {
-	kuid_t uid;
-	char comm[TASK_COMM_LEN];
-	char exe_buf[256];
-	char *exe_path = "unknown";
-
-	struct task_struct *curr = get_current();
-
-	uid = current_uid();
-
-	get_task_comm(comm, curr);
-
-	struct file *exe_file = get_task_exe_file(curr);
-	if (exe_file)
-	{
-		char *tmp = d_path(&exe_file->f_path, exe_buf, sizeof(exe_buf));
-		if (!IS_ERR(tmp))
-			exe_path = tmp;
-	}
-
-	struct policy_node *tmp = tlsm_policies->head;
-
-	while (tmp)
-	{
-		if (tmp->policy->op == TLSM_SOCKET_CONNECT)
-		{
-			if (strncmp(comm, tmp->policy->subject, strlen(tmp->policy->subject)) == 0)
-			{
-				if (tmp->policy->object_type == AF_INET)
-				{
-					struct sockaddr_in *addr4 = (struct sockaddr_in *)address;
-					char ip[16];
-					snprintf(ip, sizeof(ip), "%pI4", &addr4->sin_addr);
-
-					if (strcmp(ip, tmp->policy->object) == 0)
-					{
-						printk(KERN_DEBUG "[TLSM][SOCK][BLOCK] blocking %s connect to %s", exe_path, ip);
-						return 1;
-					}
-				}
-				if (tmp->policy->object_type == AF_INET6)
-				{
-					struct sockaddr_in6 *addr6 = (struct sockaddr_in6 *)address;
-					char ip[48];
-					snprintf(ip, sizeof(ip), "%pI6", &addr6->sin6_addr);
-
-					if (strcmp(ip, tmp->policy->object) == 0)
-					{
-						printk(KERN_DEBUG "[TLSM][SOCK][BLOCK] blocking %s connect to %s", exe_path, ip);
-						return 1;
-					}
-				}
-				if (address->sa_family == AF_UNIX)
-				{
-					struct sockaddr_un *addr_un = (struct sockaddr_un *)address;
-
-					if (strcmp(addr_un->sun_path, tmp->policy->object) == 0)
-					{
-						printk(KERN_DEBUG "[TLSM][SOCK][BLOCK] blocking %s connect to %s", exe_path, addr_un->sun_path);
-						return 1;
-					}
-				}
-			}
-		}
-		tmp = tmp->next;
-	}
-
-	return 0;
+	return __tlsm_hook_socket(sock, address, addrlen, TLSM_SOCKET_CONNECT);
 }
 
 /* TLSM security hooks */
-/* these hooks handle the allocation and destruction 
+/* these hooks handle the allocation and destruction
  *of the opaque security struct */
 
-static int tlsm_task_allocate(struct task_struct *task, u64 clone_flags) {
+static int tlsm_task_allocate(struct task_struct *task, u64 clone_flags)
+{
 	return 0;
 }
 
-static void tlsm_task_free(struct task_struct *task) {
+static void tlsm_task_free(struct task_struct *task)
+{
 }
 
 static struct security_hook_list hooks[] __ro_after_init = {
+	// syscall hooks
 	LSM_HOOK_INIT(file_open, tlsm_hook_open),
 	LSM_HOOK_INIT(socket_bind, tlsm_hook_sbind),
 	LSM_HOOK_INIT(socket_connect, tlsm_hook_sconnect),
-	
+
+	// tlsm memory management hooks
 	LSM_HOOK_INIT(task_alloc, tlsm_task_allocate),
 	LSM_HOOK_INIT(task_free, tlsm_task_free),
 };
