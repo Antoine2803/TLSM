@@ -169,18 +169,22 @@ struct policy *parse_policy(char *rule)
     if (!new_policy || word_count < 3)
         goto parse_policy_fail;
 
-    tlsm_ops_t op = str2tlsm_ops(words[1]);
+    tlsm_category_t category = str2tlsm_cat(words[1]);
+    kfree(words[1]);
+
+    tlsm_ops_t op = str2tlsm_ops(words[2]);
     if (op == TLSM_OP_UNDEFINED)
     {
         printk(KERN_ERR "[TLSM][ERREUR] cannot parse operation %s", words[0]);
         goto parse_policy_fail;
     }
-    kfree(words[1]);
+    kfree(words[2]);
 
     new_policy->subject = words[0];
+    new_policy->category = category;
     new_policy->op = op;
-    new_policy->object = words[2];
-    free_karray_from(words, 3, word_count);
+    new_policy->object = words[3];
+    free_karray_from(words, 4, word_count);
 
     kfree(words);
 

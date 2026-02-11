@@ -1,20 +1,65 @@
+#include <linux/semaphore.h>
+
 
 #include "tlsm.h"
 #include "access.h"
 #include "utils.h"
+#include "fs.h"
 
 extern struct plist *tlsm_policies;
+/**
+ * process_policy - process a policy depending on its category (allow, deny, ask)
+ *
+ * Return 0 if the operation is allowed or -EPERM is not allowed.
+ * For "ask" policies, ask the user via security fs. If answer times out or error, default to -EPERM.
+ */
+int process_policy(struct policy *pol, struct access_t access_request)
+{
+    switch (pol->category)
+    {
+    case TLSM_ASK:
+        // ask user 
+        // TODO: replace request with actual values
+        struct fs_request* fs_req = create_fs_request(1000, 12345);
+        if(!fs_req)
+            return -EPERM;
+
+        //TODO : ajouter un calcul pour obtenir le nombre de jiffies depuis la 
+        int ret = down_timeout(&(fs_req->sem), (unsigned long long)20000); /* jiffies = fréquence interce du kernel */
+        // TODO: cleanup du sémaphore
+        if (ret == 0) {
+            // acquire was successfull
+            printk(KERN_DEBUG "[TLSM][ACCESS] semaphore OK, got answer %s", tlsm_cat2str(fs_req->answer));
+            
+            // TODO: return user response
+            return -(int)fs_req->answer;
+        } else {
+            // timeout or other issue
+            printk(KERN_DEBUG "[TLSM][ACCESS] semaphore timeout");
+            return -EPERM;
+        }
+        break;
+
+    case TLSM_ALLOW:
+        return 0;
+        break;
+    case TLSM_DENY:
+    default:
+        return -EPERM;
+        break;
+    }
+}
 
 int autorize_access(struct access_t access_request)
 {
     char comm[TASK_COMM_LEN];
     struct policy_node *pointer = tlsm_policies->head;
-    
-    struct task_struct* task = get_current();
+
+    struct task_struct *task = get_current();
     struct tlsm_task_security *ts = get_task_security(task);
-    
+
     get_task_comm(comm, task);
-    
+
     // char *exe_path = "unknown";
     // struct file *exe_file = get_task_exe_file(curr);
     // if (exe_file)
@@ -24,19 +69,29 @@ int autorize_access(struct access_t access_request)
     //         exe_path = tmp;
     // }
 
+    struct policy *p;
     while (pointer)
     {
-        struct policy *p = pointer->policy;
+        p = pointer->policy;
         if (p->op == access_request.op)
         {
             if (strncmp(comm, p->subject, strlen(p->subject)) == 0)
             {
-                if (strncmp(access_request.object, p->object, strlen(p->object)) == 0)
+                switch (access_request.op)
                 {
-                    ts->hit_count++;
-                    p->hit_count++;
-                    printk(KERN_DEBUG "[TLSM][ACCESS][BLOCK] %s %s %s (%llu time)", comm, tlsm_ops2str(access_request.op), access_request.object, ts->hit_count);
-                    return 1;
+                case TLSM_FILE_OPEN:
+                    if (strstr(access_request.object, p->object) != NULL)
+                        goto apply;
+                    break;
+
+                case TLSM_SOCKET_BIND:
+                case TLSM_SOCKET_CONNECT:
+                    if (strncmp(access_request.object, p->object, strlen(p->object)) == 0 || strncmp(p->object, "any", strlen(p->object)) == 0)
+                        goto apply;
+                    break;
+
+                default:
+                    break;
                 }
             }
         }
@@ -45,4 +100,19 @@ int autorize_access(struct access_t access_request)
 
     // allowing operation
     return 0;
+
+apply:
+    int answer = process_policy(p, access_request);
+    if(answer == 0) {
+        return 0;
+    } else {
+        goto rejected;
+    }
+
+rejected:
+    ts->hit_count++;
+    p->hit_count++;
+    printk(KERN_DEBUG "[TLSM][ACCESS][BLOCK] %s %s %s (%llu time)", comm, tlsm_ops2str(access_request.op), access_request.object, ts->hit_count);
+    // rejecting operation
+    return 1;
 }

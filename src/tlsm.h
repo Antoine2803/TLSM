@@ -8,6 +8,7 @@
 
 struct policy
 {
+    tlsm_category_t category;
     tlsm_ops_t op;
     char *subject;
     char *object;
