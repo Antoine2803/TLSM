@@ -66,3 +66,4 @@ build.err
 linux-6.*
 .vsls.json
 tools/build
+venv/

@@ -175,7 +175,7 @@ struct policy *parse_policy(char *rule)
     tlsm_ops_t op = str2tlsm_ops(words[2]);
     if (op == TLSM_OP_UNDEFINED)
     {
-        printk(KERN_ERR "[TLSM][ERREUR] cannot parse operation %s", words[0]);
+        printk(KERN_ERR "[TLSM][ERREUR] cannot parse operation %s", words[2]);
         goto parse_policy_fail;
     }
     kfree(words[2]);

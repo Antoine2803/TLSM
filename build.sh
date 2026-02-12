@@ -6,7 +6,7 @@ if [ ! -d "linux" ]; then
     echo -e "Downloading vanilla arch kernel pkg"
     git clone https://gitlab.archlinux.org/archlinux/packaging/packages/linux
     pushd linux || exit
-    git checkout 6.18.7.arch1-1
+    git checkout 6.18.9.arch1-2
     rm -rf .git
     popd || exit
 fi

@@ -3,7 +3,7 @@
 VMHOST="arch@localhost"
 
 BASE=linux-tlsm-
-VER=6.18.7.arch1-1-x86_64.pkg.tar
+VER=6.18.9.arch1-2-x86_64.pkg.tar
 
 PKGDIR="."
 PKG1="$BASE$VER"
