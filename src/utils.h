@@ -15,5 +15,4 @@ void tlsm_policy_free(struct policy *policy);
 
 void plist_debug(struct plist *l);
 
-
 #endif // _TLSM_UTILS_H

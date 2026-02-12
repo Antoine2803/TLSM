@@ -2,6 +2,7 @@
 #include <linux/types.h>
 #include <linux/dcache.h>
 #include <linux/string.h>
+#include <linux/namei.h>
 
 #include "fs.h"
 #include "tlsm.h"
@@ -9,7 +10,6 @@
 #include "common.h"
 
 struct dentry *tlsm_fs_root = NULL;
-struct fs_request tlsm_request;
 
 static ssize_t tlsm_read(struct file *file, char __user *buf,
 						 size_t count, loff_t *ppos)
@@ -143,6 +143,10 @@ static ssize_t tlsm_req_write(struct file *file, const char __user *buf,
 	char *state;
 	state = memdup_user_nul(buf, count);
 
+	printk(KERN_DEBUG "[TLSM][DEBUG] avant le déluge");
+	struct fs_request *req = (struct fs_request *)file->f_inode->i_private;
+	printk(KERN_DEBUG "[TLSM][DEBUG] après le déluge");
+
 	const int plen = 256;
 	char fpath[256];
 	char *res = d_path(&file->f_path, fpath, plen);
@@ -151,22 +155,22 @@ static ssize_t tlsm_req_write(struct file *file, const char __user *buf,
 	switch (*state)
 	{
 	case '0':
-		tlsm_request.answer = TLSM_ALLOW;
+		req->answer = TLSM_ALLOW;
 		break;
 
 	case '1':
-		tlsm_request.answer = TLSM_DENY;
+		req->answer = TLSM_DENY;
 		break;
 
 	default:
 		printk(KERN_ERR "[TLSM][ERROR] Cannot parse anwser %s assuming deny", state);
-		tlsm_request.answer = TLSM_DENY;
+		req->answer = TLSM_DENY;
 		break;
 	}
 
 	// wake up lsm hook pending on user response
 	printk(KERN_DEBUG "[TLSM] increasing semaphore");
-	up(&(tlsm_request.sem));
+	up(&(req->sem));
 
 	*ppos += count;
 	return count;
@@ -196,27 +200,73 @@ fs_initcall(tlsm_interface_init);
 
 struct fs_request *create_fs_request(int uid, int request_number)
 {
-	if (!tlsm_fs_root) {
+	if (!tlsm_fs_root)
+	{
 		printk(KERN_ERR "[TLSM][FS][ERROR] attemped to create user request file but fs not initialized");
 		return NULL;
 	}
 
+	struct fs_request *req;
+	req = kmalloc(sizeof(*req), GFP_KERNEL);
+	if (!req)
+		return NULL;
+
 	printk(KERN_DEBUG "[TLSM][FS] creating request file for uid %d, request %d", uid, request_number);
-	
-	sema_init(&tlsm_request.sem, 0); // init caller wake-up semaphore
+
+	req->number = request_number;
+	sema_init(&req->sem, 0); // init caller wake-up semaphore
+	printk(KERN_DEBUG "[TLSM][DEBUG] init semaphore");
 
 	// convert numbers to string
-	char buf[16], buf2[16];
+	char buf[16];
+	char buf2[16];
 	snprintf(buf, sizeof(buf), "user_%d", uid);
 	snprintf(buf2, sizeof(buf2), "request_%d", request_number);
 
-	// create request file
-	// TODO : check if already exists
-	struct dentry *user_fsdir = securityfs_create_dir(buf, tlsm_fs_root);
-	
+	// create user request folder
+	struct dentry *user_fsdir;
+
+	user_fsdir = securityfs_create_dir(buf, tlsm_fs_root);
+	int lookedup = 0;
+	if (IS_ERR(user_fsdir))
+	{
+		if (PTR_ERR(user_fsdir) == -EEXIST)
+		{
+			printk(KERN_DEBUG "[TLSM][FS] dir already exists, looking up for dentry");
+			struct qstr name = QSTR(buf);
+			lookedup = 1;
+			user_fsdir = lookup_noperm(&name, tlsm_fs_root);
+
+			if (IS_ERR(user_fsdir))
+			{
+				printk(KERN_ERR "[TLSM][FS][ERROR] lookup failed");
+				kfree(req);
+				return NULL;
+			}
+		}
+		else
+		{
+			printk(KERN_ERR "[TLSM][FS][ERROR] create_dir failed");
+			kfree(req);
+			return NULL;
+		}
+	}
+
 	// TODO check if already exist
-	securityfs_create_file(buf2, 0666, user_fsdir, NULL, &tlsm_reqfile_ops);
+	req->request_file = securityfs_create_file(buf2, 0666, user_fsdir, req, &tlsm_reqfile_ops);
+	printk(KERN_DEBUG "[TLSM][DEBUG] secufs request_%d created", request_number);
 
 	// TODO: set user as owner of dir & files
-	return &tlsm_request;
+
+	if (lookedup)
+		dput(user_fsdir);
+
+	return req;
+}
+
+void remove_fs_file(struct fs_request *req)
+{
+	printk(KERN_DEBUG "[TLSM][DEBUG] removing file %s", req->request_file->d_iname);
+	securityfs_remove(req->request_file);
+	kfree(req);
 }

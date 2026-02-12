@@ -305,7 +305,7 @@ int tlsm_plist_del(struct plist *plist, int index)
         if (curr) // if the node actually exists
         {
             if (prev) // if curr is node the firs node of the list
-            { // curr is not the head
+            {         // curr is not the head
                 prev->next = curr->next;
                 if (curr->next == NULL)
                     plist->tail = prev;
@@ -313,8 +313,8 @@ int tlsm_plist_del(struct plist *plist, int index)
             else
             { // curr is the head / first node of the list
                 plist->head = curr->next;
-                if (plist->tail == curr) // if curr was the only node 
-                    plist->tail = NULL; 
+                if (plist->tail == curr) // if curr was the only node
+                    plist->tail = NULL;
             }
             kfree(curr);
             return 0;

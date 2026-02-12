@@ -1,12 +1,12 @@
 #include <linux/semaphore.h>
 
-
 #include "tlsm.h"
 #include "access.h"
 #include "utils.h"
 #include "fs.h"
 
-extern struct plist *tlsm_policies;
+static unsigned long long request_count = 0;
+
 /**
  * process_policy - process a policy depending on its category (allow, deny, ask)
  *
@@ -18,24 +18,29 @@ int process_policy(struct policy *pol, struct access_t access_request)
     switch (pol->category)
     {
     case TLSM_ASK:
-        // ask user 
+        // ask user
         // TODO: replace request with actual values
-        struct fs_request* fs_req = create_fs_request(1000, 12345);
-        if(!fs_req)
+        struct fs_request *fs_req = create_fs_request(1000, request_count++);
+        if (!fs_req)
             return -EPERM;
 
-        //TODO : ajouter un calcul pour obtenir le nombre de jiffies depuis la 
-        int ret = down_timeout(&(fs_req->sem), (unsigned long long)20000); /* jiffies = fréquence interce du kernel */
+        // TODO : ajouter un calcul pour obtenir le nombre de jiffies depuis la
+        int ret = down_timeout(&(fs_req->sem), (unsigned long long)20000); /* jiffies = fréquence interne du kernel */
         // TODO: cleanup du sémaphore
-        if (ret == 0) {
+        if (ret == 0)
+        {
             // acquire was successfull
             printk(KERN_DEBUG "[TLSM][ACCESS] semaphore OK, got answer %s", tlsm_cat2str(fs_req->answer));
-            
-            // TODO: return user response
+
+            remove_fs_file(fs_req);
             return -(int)fs_req->answer;
-        } else {
+        }
+        else
+        {
             // timeout or other issue
             printk(KERN_DEBUG "[TLSM][ACCESS] semaphore timeout");
+
+            remove_fs_file(fs_req);
             return -EPERM;
         }
         break;
@@ -103,9 +108,12 @@ int autorize_access(struct access_t access_request)
 
 apply:
     int answer = process_policy(p, access_request);
-    if(answer == 0) {
+    if (answer == 0)
+    {
         return 0;
-    } else {
+    }
+    else
+    {
         goto rejected;
     }
 
