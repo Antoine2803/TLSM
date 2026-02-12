@@ -143,9 +143,7 @@ static ssize_t tlsm_req_write(struct file *file, const char __user *buf,
 	char *state;
 	state = memdup_user_nul(buf, count);
 
-	printk(KERN_DEBUG "[TLSM][DEBUG] avant le déluge");
 	struct fs_request *req = (struct fs_request *)file->f_inode->i_private;
-	printk(KERN_DEBUG "[TLSM][DEBUG] après le déluge");
 
 	const int plen = 256;
 	char fpath[256];
@@ -215,7 +213,6 @@ struct fs_request *create_fs_request(int uid, int request_number)
 
 	req->number = request_number;
 	sema_init(&req->sem, 0); // init caller wake-up semaphore
-	printk(KERN_DEBUG "[TLSM][DEBUG] init semaphore");
 
 	// convert numbers to string
 	char buf[16];
@@ -254,7 +251,7 @@ struct fs_request *create_fs_request(int uid, int request_number)
 
 	// TODO check if already exist
 	req->request_file = securityfs_create_file(buf2, 0666, user_fsdir, req, &tlsm_reqfile_ops);
-	printk(KERN_DEBUG "[TLSM][DEBUG] secufs request_%d created", request_number);
+	printk(KERN_DEBUG "[TLSM][FS] secufs request file request_%d created", request_number);
 
 	// TODO: set user as owner of dir & files
 
@@ -266,7 +263,7 @@ struct fs_request *create_fs_request(int uid, int request_number)
 
 void remove_fs_file(struct fs_request *req)
 {
-	printk(KERN_DEBUG "[TLSM][DEBUG] removing file %s", req->request_file->d_iname);
+	printk(KERN_DEBUG "[TLSM][FS] removing file %s", req->request_file->d_iname);
 	securityfs_remove(req->request_file);
 	kfree(req);
 }

@@ -1,5 +1,5 @@
 pkgname=tlsm-tools-git
-pkgver=0.0.1
+pkgver=0.0.2
 pkgrel=1
 pkgdesc="TLSM configuration tool"
 arch=('x86_64')
@@ -7,6 +7,7 @@ url="https://www.youtube.com/watch?v=XfELJU1mRMg"
 license=('GPL-3.0-only')
 depends=(
   python
+  python-pyinotify
 )
 makedepends=(
   git
@@ -25,6 +26,9 @@ package() {
   mkdir -p "${pkgdir}/usr/bin/"
   cp "tlsm-tools.py" "${pkgdir}/usr/bin/tlsm-py"
   chmod +x "${pkgdir}/usr/bin/tlsm-py"
+
+  cp "tlsm-daemon.py" "${pkgdir}/usr/bin/tlsmd"
+  chmod +x "${pkgdir}/usr/bin/tlsmd"
 
   mkdir -p "${pkgdir}/etc/tlsm"
   cp "policies.conf" "${pkgdir}/etc/tlsm/policies.conf"

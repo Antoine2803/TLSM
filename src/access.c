@@ -19,8 +19,13 @@ int process_policy(struct policy *pol, struct access_t access_request)
     {
     case TLSM_ASK:
         // ask user
-        // TODO: replace request with actual values
-        struct fs_request *fs_req = create_fs_request(1000, request_count++);
+        kuid_t uid;
+        uid = current_uid();
+
+        if (uid == 0) // Don't block root actions for now
+            return 0;
+
+        struct fs_request *fs_req = create_fs_request(__kuid_val(uid), request_count++);
         if (!fs_req)
             return -EPERM;
 
@@ -33,7 +38,7 @@ int process_policy(struct policy *pol, struct access_t access_request)
             printk(KERN_DEBUG "[TLSM][ACCESS] semaphore OK, got answer %s", tlsm_cat2str(fs_req->answer));
 
             remove_fs_file(fs_req);
-            return -(int)fs_req->answer;
+            return -(int)fs_req->answer; 
         }
         else
         {

@@ -7,7 +7,7 @@ VER=6.18.9.arch1-2-x86_64.pkg.tar
 
 PKGDIR="."
 PKG1="$BASE$VER"
-PKG2="tlsm-tools-git-0.0.1-1-x86_64.pkg.tar.zst"
+PKG2="tlsm-tools-git-0.0.2-1-x86_64.pkg.tar.zst"
 
 pushd $PKGDIR || exit
 
