@@ -31,12 +31,10 @@ int process_policy(struct policy *pol, struct access_t access_request)
 
         // TODO : ajouter un calcul pour obtenir le nombre de jiffies depuis la
         int ret = down_timeout(&(fs_req->sem), (unsigned long long)20000); /* jiffies = fréquence interne du kernel */
-        // TODO: cleanup du sémaphore
         if (ret == 0)
         {
             // acquire was successfull
             printk(KERN_DEBUG "[TLSM][ACCESS] semaphore OK, got answer %s", tlsm_cat2str(fs_req->answer));
-
             remove_fs_file(fs_req);
             return -(int)fs_req->answer; 
         }

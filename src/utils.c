@@ -1,4 +1,6 @@
 #include <linux/string.h>
+#include <linux/signal.h>
+#include <linux/signal_types.h>
 
 #include "utils.h"
 #include "common.h"
@@ -195,6 +197,115 @@ parse_policy_fail:
         kfree(new_policy);
     free_karray_from(words, 0, word_count);
     return NULL;
+}
+
+/**
+ * parse_watchdog - Parse a tlsm watchdog
+ *
+ * Return: the parsed watchdog in newly *allocated memory*
+ *         NULL on failure
+ */
+struct tlsm_watchdog *parse_watchdog(char *str)
+{
+    int word_count;
+    char **words = str_split(str, ' ', &word_count);
+
+    if (!words)
+        return NULL;
+
+    if (word_count < 2)
+    {
+        free_karray_from(words, 0, word_count);
+        return NULL;
+    }
+
+    struct tlsm_watchdog *new_watchdog;
+    new_watchdog = kmalloc(sizeof(*new_watchdog), GFP_KERNEL);
+
+    int pid;
+    int err_code1 = kstrtoint(words[0], 10, &pid);
+    if (err_code1 == 0)
+    {
+        new_watchdog->pid = pid;
+    }
+    else
+    {
+        printk(KERN_ERR "[TLSM][ERROR] can't parse watchdog PID, error : %d", err_code1);
+        goto parse_watchdog_fail;
+    }
+    int uid;
+    int err_code2 = kstrtoint(words[1], 10, &uid);
+    if (err_code2 == 0)
+    {
+        new_watchdog->uid = uid;
+    }
+    else
+    {
+        printk(KERN_ERR "[TLSM][ERROR] can't parse watchdog UID, error : %d", err_code2);
+        goto parse_watchdog_fail;
+    }
+
+    free_karray_from(words, 0, word_count);
+    return new_watchdog;
+
+parse_watchdog_fail:
+    kfree(new_watchdog);
+    free_karray_from(words, 0, word_count);
+    return NULL;
+}
+/**
+ * signal_watchdog - tries to signals userland watchdog that a new request is available
+ * Remove old watchdog if process doens't exist
+ */
+void signal_watchdog(int uid, int request_number)
+{
+    // signal data
+    struct kernel_siginfo info;
+    struct task_struct *t;
+    memset(&info, 0, sizeof(struct kernel_siginfo));
+    info.si_signo = SIGUSR1;
+    info.si_code = SI_QUEUE;
+    info.si_int = request_number;
+
+    // find watchdog to signal
+    struct tlsm_watchdog *elem;
+    struct tlsm_watchdog *found = NULL;
+    list_for_each_entry(elem, &tlsm_watchdogs, node)
+    {
+        if (elem->uid == uid)
+        {
+            found = elem;
+            break;
+        }
+    }
+
+    if (found)
+    {
+        printk(KERN_DEBUG "[TLSM][WATCHDOG] found watchdog with mathcing uid %d (pid=%d)", uid, elem->pid);
+        rcu_read_lock();
+        t = pid_task(find_vpid(elem->pid), PIDTYPE_PID);
+        if (t != NULL)
+        {
+            rcu_read_unlock();
+            if (send_sig_info(SIGUSR1, &info, t) < 0)
+                printk(KERN_ERR "[TLSM][WATCHDOG] failed to send signal");
+        }
+        else
+        {
+            // TODO: improve by making the removal inside the search function 
+            // see https://docs.kernel.org/core-api/list.html#traversing-whilst-removing-nodes
+ 
+            // pid doesn't exist anymore
+            list_del(&elem->node);
+            signal_watchdog(uid, request_number); // call on the remeinder of the watchdog list
+                                                  // in case an old wathchdog died and there is a
+                                                  // new one
+        }
+    }
+    else
+    {
+        printk(KERN_DEBUG "[TLSM][WATCHDOG] no registered watchdog found");
+    }
 }
 
 /**

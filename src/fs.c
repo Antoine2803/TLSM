@@ -63,15 +63,14 @@ static ssize_t tlsm_read(struct file *file, char __user *buf,
 static ssize_t tlsm_write(struct file *file, const char __user *buf,
 						  size_t count, loff_t *ppos)
 {
-
 	const int plen = 256;
 	char fpath[256];
 	char *res = d_path(&file->f_path, fpath, plen);
 	printk(KERN_DEBUG "[TLSM][FS] write to file %s", res);
 
 	char *state;
-
 	state = memdup_user_nul(buf, count);
+
 	if (IS_ERR(state))
 		return PTR_ERR(state);
 
@@ -107,12 +106,27 @@ static ssize_t tlsm_write(struct file *file, const char __user *buf,
 		{
 			if (tlsm_plist_del(tlsm_policies, target) != 0)
 			{
-				printk(KERN_ERR "[TLSM][FS] no existing rule at index %d", target);
+				printk(KERN_ERR "[TLSM][FS][ERROR] no existing rule at index %d", target);
 			}
 		}
 		else
 		{
 			printk(KERN_ERR "[TLSM][FS] failed to parse policy index, error %d", ret);
+		}
+	}
+	else if (strncmp((const char *)&file->f_path.dentry->d_iname, "add_watchdog", 12) == 0 && strlen((const char *)&file->f_path.dentry->d_iname) == 12)
+	{
+		struct tlsm_watchdog *nw = parse_watchdog(state);
+		if (nw != NULL)
+		{
+			size_t bef = list_count_nodes(&tlsm_watchdogs);
+			list_add_tail(&nw->node, &tlsm_watchdogs);
+			size_t after = list_count_nodes(&tlsm_watchdogs);
+			printk(KERN_DEBUG "[TLSM][FS][ERROR] adding watchdog, %zu->%zu", bef, after);			
+		}
+		else
+		{
+			printk(KERN_ERR "[TLSM][FS][ERROR] Cannot create new watchdog");
 		}
 	}
 	else
@@ -132,7 +146,7 @@ static const struct file_operations tlsm_ops = {
 static ssize_t tlsm_req_read(struct file *file, char __user *buf,
 							 size_t count, loff_t *ppos)
 {
-	// TODO : serialize request
+	printk(KERN_DEBUG "TODO : serialize request");
 	return 0;
 }
 
@@ -188,6 +202,7 @@ static int tlsm_interface_init(void)
 {
 	tlsm_fs_root = securityfs_create_dir("tlsm", NULL);
 	printk(KERN_DEBUG "[TLSM] fs created");
+	securityfs_create_file("add_watchdog", 0666, tlsm_fs_root, NULL, &tlsm_ops);
 	securityfs_create_file("add_policy", 0666, tlsm_fs_root, NULL, &tlsm_ops);
 	securityfs_create_file("del_policy", 0666, tlsm_fs_root, NULL, &tlsm_ops);
 	securityfs_create_file("list_policies", 0666, tlsm_fs_root, NULL, &tlsm_ops);
@@ -196,6 +211,11 @@ static int tlsm_interface_init(void)
 
 fs_initcall(tlsm_interface_init);
 
+/**
+ * create_fs_request - create a new file associated with a access request
+ *
+ * Returns the fs_request associated with the created file. Can return NULL
+ */
 struct fs_request *create_fs_request(int uid, int request_number)
 {
 	if (!tlsm_fs_root)
@@ -244,21 +264,32 @@ struct fs_request *create_fs_request(int uid, int request_number)
 		else
 		{
 			printk(KERN_ERR "[TLSM][FS][ERROR] create_dir failed");
-			kfree(req);
-			return NULL;
+			goto fs_request_fail;
 		}
 	}
-
-	// TODO check if already exist
+	
 	req->request_file = securityfs_create_file(buf2, 0666, user_fsdir, req, &tlsm_reqfile_ops);
+	if (IS_ERR(req->request_file))
+	{
+		printk(KERN_ERR "[TLSM][FS] tried to overwrite existing request file request_%d", request_number);
+		goto fs_request_fail;
+	}
 	printk(KERN_DEBUG "[TLSM][FS] secufs request file request_%d created", request_number);
 
 	// TODO: set user as owner of dir & files
+
+	signal_watchdog(uid, request_number);
 
 	if (lookedup)
 		dput(user_fsdir);
 
 	return req;
+
+fs_request_fail:
+	if (lookedup)
+		dput(user_fsdir);
+	kfree(req);
+	return NULL;
 }
 
 void remove_fs_file(struct fs_request *req)

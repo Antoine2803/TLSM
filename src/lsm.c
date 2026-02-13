@@ -28,6 +28,8 @@ inline struct tlsm_task_security *get_task_security(struct task_struct *ts)
 };
 
 struct plist *tlsm_policies;
+struct list_head tlsm_watchdogs;
+
 
 /* TLSM Operation hooks */
 /* these hooks are called on operations */
@@ -123,8 +125,10 @@ static int __init tlsm_init(void)
 	tlsm_policies = tlsm_plist_new();
 	if (!tlsm_policies)
 	{
-		printk(KERN_ERR "[TLSM] failed to init policies ! TODO: remove hooks on init failure");
+		printk(KERN_ERR "[TLSM] failed to init policies !");
 	}
+	INIT_LIST_HEAD(&tlsm_watchdogs);
+	
 	return 0;
 }
 

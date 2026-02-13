@@ -35,6 +35,12 @@ struct tlsm_request
     char *subject;
 };
 
+struct tlsm_watchdog {
+    int uid; // watchdog's owern user id
+    int pid; // pid of wathdog process
+    struct list_head node;
+};
+
 extern struct lsm_blob_sizes tlsm_blob_sizes;
 inline struct tlsm_task_security *get_task_security(struct task_struct *ts);
 
@@ -45,5 +51,7 @@ struct tlsm_task_security
 };
 
 extern struct plist *tlsm_policies; // linked list of active policies
+
+extern struct list_head tlsm_watchdogs;
 
 #endif /* _TLSM_H */

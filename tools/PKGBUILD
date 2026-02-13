@@ -7,7 +7,6 @@ url="https://www.youtube.com/watch?v=XfELJU1mRMg"
 license=('GPL-3.0-only')
 depends=(
   python
-  python-pyinotify
 )
 makedepends=(
   git
