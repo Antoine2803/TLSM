@@ -22,7 +22,7 @@ int process_policy(struct policy *pol, struct access_t access_request)
         kuid_t uid;
         uid = current_uid();
 
-        if (uid == 0) // Don't block root actions for now
+        if (__kuid_val(uid) == 0) // Don't block root actions for now
             return 0;
 
         struct fs_request *fs_req = create_fs_request(__kuid_val(uid), request_count++);
