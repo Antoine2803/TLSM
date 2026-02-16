@@ -29,8 +29,7 @@ int process_policy(struct policy *pol, struct access_t access_request)
         if (!fs_req)
             return -EPERM;
 
-        // TODO : ajouter un calcul pour obtenir le nombre de jiffies depuis la
-        int ret = down_timeout(&(fs_req->sem), (unsigned long long)20000); /* jiffies = fréquence interne du kernel */
+        int ret = down_timeout(&(fs_req->sem), msecs_to_jiffies(request_timeout * 1000));
         if (ret == 0)
         {
             // acquire was successfull

@@ -51,7 +51,7 @@ struct tlsm_task_security
 };
 
 extern struct plist *tlsm_policies; // linked list of active policies
-
 extern struct list_head tlsm_watchdogs;
+extern int request_timeout; // timeout for interactive mode
 
 #endif /* _TLSM_H */

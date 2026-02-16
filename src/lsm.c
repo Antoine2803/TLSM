@@ -14,9 +14,9 @@
 #include "utils.h"
 #include "access.h"
 
-static int mode = 0;
-module_param(mode, int, S_IRUGO);
-MODULE_PARM_DESC(mode, "TLSM mode");
+int request_timeout = 20;
+module_param(request_timeout, int, S_IRUGO);
+MODULE_PARM_DESC(request_timeout, "TLSM interactive request timeout");
 
 struct lsm_blob_sizes tlsm_blob_sizes __ro_after_init = {
 	.lbs_task = sizeof(struct tlsm_task_security),
@@ -121,7 +121,7 @@ static const struct lsm_id tlsm_lsmid = {
 static int __init tlsm_init(void)
 {
 	security_add_hooks(hooks, ARRAY_SIZE(hooks), &tlsm_lsmid);
-	printk(KERN_INFO "[TLSM] loaded with mode %d", mode);
+	printk(KERN_INFO "[TLSM] loaded with interactive timeout=%d", request_timeout);
 	tlsm_policies = tlsm_plist_new();
 	if (!tlsm_policies)
 	{
