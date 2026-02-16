@@ -1,4 +1,5 @@
 #include <linux/security.h>
+#include <linux/cred.h>
 #include <linux/types.h>
 #include <linux/dcache.h>
 #include <linux/string.h>
@@ -266,17 +267,24 @@ struct fs_request *create_fs_request(int uid, int request_number)
 			printk(KERN_ERR "[TLSM][FS][ERROR] create_dir failed");
 			goto fs_request_fail;
 		}
+	} else {
+		// folder _created_ successfully
+		// setting perms
+		user_fsdir->d_inode->i_gid = current_gid();
+		user_fsdir->d_inode->i_uid = current_uid();
+		user_fsdir->d_inode->i_mode = S_IFDIR | 0700;
 	}
-	
-	req->request_file = securityfs_create_file(buf2, 0666, user_fsdir, req, &tlsm_reqfile_ops);
+
+
+	req->request_file = securityfs_create_file(buf2, 0600, user_fsdir, req, &tlsm_reqfile_ops);
 	if (IS_ERR(req->request_file))
 	{
 		printk(KERN_ERR "[TLSM][FS] tried to overwrite existing request file request_%d", request_number);
 		goto fs_request_fail;
 	}
 	printk(KERN_DEBUG "[TLSM][FS] secufs request file request_%d created", request_number);
-
-	// TODO: set user as owner of dir & files
+	req->request_file->d_inode->i_gid = current_gid();
+	req->request_file->d_inode->i_uid = current_uid();
 
 	signal_watchdog(uid, request_number);
 
