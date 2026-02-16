@@ -437,6 +437,7 @@ int tlsm_plist_del(struct plist *plist, int index)
                 if (plist->tail == curr) // if curr was the only node
                     plist->tail = NULL;
             }
+            tlsm_policy_free(curr->policy);
             kfree(curr);
             return 0;
         }

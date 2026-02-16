@@ -37,6 +37,6 @@ if [[ "$1" == "base" ]]; then
     FS=$BASEFS
 fi
 
-qemu-system-x86_64 -smp 2 -enable-kvm -vga std -nic user,hostfwd=tcp::60022-:22 -m 1G "$FS"
+qemu-system-x86_64 -smp 2 -enable-kvm -vga std -nic user,hostfwd=tcp::60022-:22 -m 4G "$FS"
 
 popd || exit

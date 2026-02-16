@@ -1,4 +1,5 @@
 #include <linux/semaphore.h>
+#include <linux/file.h>
 
 #include "tlsm.h"
 #include "access.h"
@@ -21,6 +22,21 @@ int process_policy(struct policy *pol, struct access access_request)
         // ask user
         kuid_t uid;
         uid = current_uid();
+
+        char *exe_path = "unknown";
+        char exe_buf[512];
+        struct file *exe_file = get_task_exe_file(task);
+        if (exe_file)
+        {
+            char *tmp = d_path(&exe_file->f_path, exe_buf, sizeof(exe_buf));
+            if (!IS_ERR(tmp))
+                exe_path = tmp;
+
+            fput(exe_file);
+        }
+
+        access_request.subject = (char *)kmalloc(strlen(exe_path) + 1, GFP_KERNEL);
+        memcpy(access_request.subject, exe_path, strlen(exe_path) + 1);
 
         if (__kuid_val(uid) == 0) // Don't block root actions for now
             return 0;
@@ -50,12 +66,10 @@ int process_policy(struct policy *pol, struct access access_request)
         break;
 
     case TLSM_ALLOW:
-        kfree(access_request.subject);
         return 0;
         break;
     case TLSM_DENY:
     default:
-        kfree(access_request.subject);
         return -EPERM;
         break;
     }
@@ -70,19 +84,6 @@ int autorize_access(struct access access_request)
     struct tlsm_task_security *ts = get_task_security(task);
 
     get_task_comm(comm, task);
-
-    char *exe_path = "unknown";
-    char exe_buf[512];
-    struct file *exe_file = get_task_exe_file(task);
-    if (exe_file)
-    {
-        char *tmp = d_path(&exe_file->f_path, exe_buf, sizeof(exe_buf));
-        if (!IS_ERR(tmp))
-            exe_path = tmp;
-    }
-
-    access_request.subject = (char *)kmalloc(strlen(exe_path) + 1, GFP_KERNEL);
-    memcpy(access_request.subject, exe_path, strlen(exe_path) + 1);
 
     struct policy *p;
     while (pointer)

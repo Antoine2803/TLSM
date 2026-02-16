@@ -49,13 +49,17 @@ static ssize_t tlsm_read(struct file *file, char __user *buf,
 
 	if (*ppos >= rlen || !count)
 	{
+		kfree(kbuf);
 		return 0;
-	}
-
-	if (copy_to_user(buf, kbuf, rlen))
+	} else if (copy_to_user(buf, kbuf, rlen))
 	{
+		kfree(kbuf);
 		return -EFAULT;
 	}
+
+	if(kbuf)
+		kfree(kbuf);
+
 	*ppos += rlen;
 	return rlen;
 }
@@ -172,13 +176,19 @@ static ssize_t tlsm_req_read(struct file *file, char __user *buf,
 
 	if (*ppos >= rlen || !count)
 	{
+		kfree(kbuf);
 		return 0;
 	}
 
 	if (copy_to_user(buf, kbuf, rlen))
 	{
+		kfree(kbuf);
 		return -EFAULT;
 	}
+
+	if (kbuf)
+		kfree(kbuf);
+
 	*ppos += rlen;
 	return rlen;
 }
@@ -216,6 +226,9 @@ static ssize_t tlsm_req_write(struct file *file, const char __user *buf,
 	// wake up lsm hook pending on user response
 	printk(KERN_DEBUG "[TLSM] increasing semaphore");
 	up(&(req->sem));
+
+	if(state)
+		kfree(state);
 
 	*ppos += count;
 	return count;
