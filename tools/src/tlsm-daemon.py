@@ -103,7 +103,8 @@ def main():
         try:
             info = signal.sigwaitinfo([signal.SIGUSR1])
             try:
-                request_queue.put_nowait(info.si_status)
+                if info.si_pid == 0 and info.si_uid==0: #ensuring the signal has been sent by the kernel
+                    request_queue.put_nowait(info.si_status)
             except Full:
                 print(f"{TAG_WARN} request queue is FULL ! request will be lost !")
         except InterruptedError:
