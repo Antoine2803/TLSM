@@ -35,7 +35,7 @@ int process_policy(struct policy *pol, struct access access_request)
             // acquire was successfull
             printk(KERN_DEBUG "[TLSM][ACCESS] semaphore OK, got answer %s", tlsm_cat2str(fs_req->answer));
             remove_fs_file(fs_req);
-            kfree(access_request->subject);
+            kfree(access_request.subject);
             return -(int)fs_req->answer;
         }
         else
@@ -43,19 +43,19 @@ int process_policy(struct policy *pol, struct access access_request)
             // timeout or other issue
             printk(KERN_DEBUG "[TLSM][ACCESS] semaphore timeout");
 
-            kfree(access_request->subject);
+            kfree(access_request.subject);
             remove_fs_file(fs_req);
             return -EPERM;
         }
         break;
 
     case TLSM_ALLOW:
-        kfree(access_request->subject);
+        kfree(access_request.subject);
         return 0;
         break;
     case TLSM_DENY:
     default:
-        kfree(access_request->subject);
+        kfree(access_request.subject);
         return -EPERM;
         break;
     }
