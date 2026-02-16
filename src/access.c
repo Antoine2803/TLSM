@@ -13,7 +13,7 @@ static unsigned long long request_count = 0;
  * Return 0 if the operation is allowed or -EPERM is not allowed.
  * For "ask" policies, ask the user via security fs. If answer times out or error, default to -EPERM.
  */
-int process_policy(struct policy *pol, struct access_t access_request)
+int process_policy(struct policy *pol, struct access access_request)
 {
     switch (pol->category)
     {
@@ -25,7 +25,7 @@ int process_policy(struct policy *pol, struct access_t access_request)
         if (__kuid_val(uid) == 0) // Don't block root actions for now
             return 0;
 
-        struct fs_request *fs_req = create_fs_request(__kuid_val(uid), request_count++);
+        struct fs_request *fs_req = create_fs_request(__kuid_val(uid), access_request, request_count++);
         if (!fs_req)
             return -EPERM;
 
@@ -35,29 +35,33 @@ int process_policy(struct policy *pol, struct access_t access_request)
             // acquire was successfull
             printk(KERN_DEBUG "[TLSM][ACCESS] semaphore OK, got answer %s", tlsm_cat2str(fs_req->answer));
             remove_fs_file(fs_req);
-            return -(int)fs_req->answer; 
+            kfree(access_request->subject);
+            return -(int)fs_req->answer;
         }
         else
         {
             // timeout or other issue
             printk(KERN_DEBUG "[TLSM][ACCESS] semaphore timeout");
 
+            kfree(access_request->subject);
             remove_fs_file(fs_req);
             return -EPERM;
         }
         break;
 
     case TLSM_ALLOW:
+        kfree(access_request->subject);
         return 0;
         break;
     case TLSM_DENY:
     default:
+        kfree(access_request->subject);
         return -EPERM;
         break;
     }
 }
 
-int autorize_access(struct access_t access_request)
+int autorize_access(struct access access_request)
 {
     char comm[TASK_COMM_LEN];
     struct policy_node *pointer = tlsm_policies->head;
@@ -67,14 +71,18 @@ int autorize_access(struct access_t access_request)
 
     get_task_comm(comm, task);
 
-    // char *exe_path = "unknown";
-    // struct file *exe_file = get_task_exe_file(curr);
-    // if (exe_file)
-    // {
-    //     char *tmp = d_path(&exe_file->f_path, exe_buf, sizeof(exe_buf));
-    //     if (!IS_ERR(tmp))
-    //         exe_path = tmp;
-    // }
+    char *exe_path = "unknown";
+    char exe_buf[512];
+    struct file *exe_file = get_task_exe_file(task);
+    if (exe_file)
+    {
+        char *tmp = d_path(&exe_file->f_path, exe_buf, sizeof(exe_buf));
+        if (!IS_ERR(tmp))
+            exe_path = tmp;
+    }
+
+    access_request.subject = (char *)kmalloc(strlen(exe_path) + 1, GFP_KERNEL);
+    memcpy(access_request.subject, exe_path, strlen(exe_path) + 1);
 
     struct policy *p;
     while (pointer)

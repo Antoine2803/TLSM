@@ -40,7 +40,7 @@ static int tlsm_hook_open(struct file *f)
 
 	char *res = d_path(&f->f_path, buf, buflen);
 
-	struct access_t access_request;
+	struct access access_request;
 	access_request.op = TLSM_FILE_OPEN;
 	access_request.object = res;
 
@@ -50,7 +50,7 @@ static int tlsm_hook_open(struct file *f)
 static int __tlsm_hook_socket(struct socket *sock, struct sockaddr *address, int addrlen, tlsm_ops_t sock_op)
 {
 	char ip[48];
-	struct access_t access_request;
+	struct access access_request;
 	access_request.op = sock_op;
 
 	switch (address->sa_family)

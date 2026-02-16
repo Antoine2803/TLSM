@@ -233,6 +233,16 @@ struct tlsm_watchdog *parse_watchdog(char *str)
         printk(KERN_ERR "[TLSM][ERROR] can't parse watchdog PID, error : %d", err_code1);
         goto parse_watchdog_fail;
     }
+
+    char comm[TASK_COMM_LEN];
+    struct task_struct *t = pid_task(find_vpid(pid), PIDTYPE_PID);
+    get_task_comm(comm, t);
+    if (strcmp(comm, "tlsmd") != 0)
+    {
+        printk(KERN_DEBUG "[TLSM][ERROR] trying to add an unknown watchdog");
+        goto parse_watchdog_fail;
+    }
+
     int uid;
     int err_code2 = kstrtoint(words[1], 10, &uid);
     if (err_code2 == 0)
@@ -292,9 +302,9 @@ void signal_watchdog(int uid, int request_number)
         }
         else
         {
-            // TODO: improve by making the removal inside the search function 
+            // TODO: improve by making the removal inside the search function
             // see https://docs.kernel.org/core-api/list.html#traversing-whilst-removing-nodes
- 
+
             // pid doesn't exist anymore
             list_del(&elem->node);
             signal_watchdog(uid, request_number); // call on the remeinder of the watchdog list

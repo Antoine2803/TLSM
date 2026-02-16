@@ -8,6 +8,7 @@
 #include "fs.h"
 #include "tlsm.h"
 #include "utils.h"
+#include "access.h"
 #include "common.h"
 
 struct dentry *tlsm_fs_root = NULL;
@@ -18,7 +19,7 @@ static ssize_t tlsm_read(struct file *file, char __user *buf,
 	const int plen = 256;
 	char fpath[256];
 	char *res = d_path(&file->f_path, fpath, plen);
-	printk(KERN_DEBUG "[TLSM] read to file %s, out buff size %lu", res, count);
+	printk(KERN_DEBUG "[TLSM][FS] read to file %s, out buff size %lu", res, count);
 
 	int rlen = 0;
 	long pos = *ppos;
@@ -43,10 +44,8 @@ static ssize_t tlsm_read(struct file *file, char __user *buf,
 	}
 	else
 	{
-		printk(KERN_DEBUG "[TLSM][FS] fs error");
+		printk(KERN_DEBUG "[TLSM][ERROR] fs error");
 	}
-
-	printk(KERN_DEBUG "[TLSM][FS] read request output %s", kbuf);
 
 	if (*ppos >= rlen || !count)
 	{
@@ -123,7 +122,7 @@ static ssize_t tlsm_write(struct file *file, const char __user *buf,
 			size_t bef = list_count_nodes(&tlsm_watchdogs);
 			list_add_tail(&nw->node, &tlsm_watchdogs);
 			size_t after = list_count_nodes(&tlsm_watchdogs);
-			printk(KERN_DEBUG "[TLSM][FS][ERROR] adding watchdog, %zu->%zu", bef, after);			
+			printk(KERN_DEBUG "[TLSM][FS][ERROR] adding watchdog, %zu->%zu", bef, after);
 		}
 		else
 		{
@@ -147,8 +146,41 @@ static const struct file_operations tlsm_ops = {
 static ssize_t tlsm_req_read(struct file *file, char __user *buf,
 							 size_t count, loff_t *ppos)
 {
-	printk(KERN_DEBUG "TODO : serialize request");
-	return 0;
+	const int plen = 256;
+	char fpath[256];
+	char *res = d_path(&file->f_path, fpath, plen);
+	printk(KERN_DEBUG "[TLSM][FS] read to file %s, out buff size %lu", res, count);
+
+	int rlen = 0;
+	long pos = *ppos;
+
+	char *kbuf;
+	kbuf = memdup_user_nul(buf, count);
+
+	struct fs_request *req = (struct fs_request *)file->f_inode->i_private;
+
+	if (strncmp((const char *)&file->f_path.dentry->d_iname, "request_", 8) == 0)
+	{
+		int j = scnprintf(&kbuf[pos], count - pos, "%s trying to %s %s\n", req->access_request.subject, tlsm_ops2str(req->access_request.op), req->access_request.object);
+		rlen += j;
+		pos += j;
+	}
+	else
+	{
+		printk(KERN_DEBUG "[TLSM][ERROR] fs error");
+	}
+
+	if (*ppos >= rlen || !count)
+	{
+		return 0;
+	}
+
+	if (copy_to_user(buf, kbuf, rlen))
+	{
+		return -EFAULT;
+	}
+	*ppos += rlen;
+	return rlen;
 }
 
 static ssize_t tlsm_req_write(struct file *file, const char __user *buf,
@@ -217,7 +249,7 @@ fs_initcall(tlsm_interface_init);
  *
  * Returns the fs_request associated with the created file. Can return NULL
  */
-struct fs_request *create_fs_request(int uid, int request_number)
+struct fs_request *create_fs_request(int uid, struct access access_request, int request_number)
 {
 	if (!tlsm_fs_root)
 	{
@@ -233,6 +265,9 @@ struct fs_request *create_fs_request(int uid, int request_number)
 	printk(KERN_DEBUG "[TLSM][FS] creating request file for uid %d, request %d", uid, request_number);
 
 	req->number = request_number;
+	req->access_request.op = access_request.op;
+	req->access_request.subject = access_request.subject;
+	req->access_request.object = access_request.object;
 	sema_init(&req->sem, 0); // init caller wake-up semaphore
 
 	// convert numbers to string
@@ -274,8 +309,7 @@ struct fs_request *create_fs_request(int uid, int request_number)
 		user_fsdir->d_inode->i_uid = current_uid();
 		user_fsdir->d_inode->i_mode = S_IFDIR | 0700;
 	}
-
-
+	
 	req->request_file = securityfs_create_file(buf2, 0600, user_fsdir, req, &tlsm_reqfile_ops);
 	if (IS_ERR(req->request_file))
 	{

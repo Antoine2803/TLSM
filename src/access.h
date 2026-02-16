@@ -1,13 +1,17 @@
 #ifndef ACCESS_H
 #define ACCESS_H
 
-struct access_t
+#include "common.h"
+#include "tlsm.h"
+
+struct access
 {
     tlsm_ops_t op;
+    char *subject;
     char *object;
 };
 
-int process_policy(struct policy *pol, struct access_t access_request);
-int autorize_access(struct access_t access_request);
+int process_policy(struct policy *pol, struct access access_request);
+int autorize_access(struct access access_request);
 
 #endif // ACCESS_H

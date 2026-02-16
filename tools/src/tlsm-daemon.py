@@ -9,6 +9,23 @@ from queue import Queue, Full, ShutDown
 import signal
 import threading
 
+class term_colors:
+    HEADER = '\033[95m'
+    OKBLUE = '\033[94m'
+    OKCYAN = '\033[96m'
+    OKGREEN = '\033[92m'
+    WARNING = '\033[93m'
+    FAIL = '\033[91m'
+    ENDC = '\033[0m'
+    BOLD = '\033[1m'
+    UNDERLINE = '\033[4m'
+
+TAG_INFO = term_colors.BOLD + term_colors.OKBLUE + "[INFO]" + term_colors.ENDC
+TAG_WARN = term_colors.BOLD + term_colors.WARNING + "[WARNING]" + term_colors.ENDC
+TAG_ERR = term_colors.BOLD + term_colors.FAIL + "[ERROR]" + term_colors.ENDC
+TAG_REQ = term_colors.BOLD + term_colors.OKGREEN + "[REQ]" + term_colors.ENDC
+TAG_REQD = term_colors.BOLD + term_colors.FAIL + "[REQ]" + term_colors.ENDC
+
 
 SYSFS_ROOT = "/sys/kernel/security/tlsm/"
 WATCHDOG_REGISTER_ENDPOINT = join(SYSFS_ROOT, "add_watchdog")
@@ -18,47 +35,52 @@ request_queue = Queue()
 
 def register_watchdog(uid):
     try:
-        print(f"registering watchdog for user {uid} via securityfs")
+        print(f"{TAG_INFO} Registering watchdog for user {uid} via securityfs")
         f = open(WATCHDOG_REGISTER_ENDPOINT, 'w')
         f.write(f"{getpid()} {uid}")
         f.close()    
     except Exception as e:
-        print("failed to register watchdog", str(e))
+        print(f"{TAG_ERR} Failed to register watchdog", str(e))
 
 def answer_request(path, value):
     try:
-        print("answering request via securityfs")
+        print(f"{TAG_INFO} Answering request via securityfs")
         f = open(path, 'w')
         f.write(str(value))
         f.close()
     except Exception as e:
-        print(f"failed to write to request file {path}. Request probably timed out", str(e))
+        print(f"{TAG_WARN} Failed to write to request file {path}. Request probably timed out\n", str(e))
 
 def process_request(path):
-    print("got request: ", path)
-    answer = input("allow ? Y/n: ")
-    print("got answer", answer)
+    print(f"{TAG_REQ} Got request: ", path)
+    with open(path) as f:
+        print(term_colors.BOLD + "-> " + f.read().strip('\n') + term_colors.ENDC)
+    answer = input(f"{term_colors.BOLD}Allow ? y/n{term_colors.ENDC}: ")
     answer = '0' if answer in ['y', 'Y', ''] else '1'
+    if answer == '1':
+        print(f"{TAG_REQD} DENYING REQUEST")
+    else:
+        print(f"{TAG_REQ} ALLOWING REQUEST")
     answer_request(path, answer)
 
 def request_scan(user_request_fpath):
     files = [ join(user_request_fpath, f) for f in listdir(user_request_fpath) if isfile(join(user_request_fpath, f))]
     for f in files:
-        print("found request file", f)
+        print("Found request file", f)
         try:
             request_queue.put_nowait(f)
         except Full:
-            print("WARNING: request queue is full. request will be dropped")
+            print(f"{TAG_WARN} Request queue is full. request will be dropped")
 
 def sig_handler(signum, frame):
-  print("ERROR: Oops, something went wrong. This handler shouldn't have been called")
+  print(f"{TAG_ERR} Oops, something went wrong. This handler shouldn't have been called")
 
 def watchdog(uid: int):
     while True:
         if isdir(USER_REQUEST_PATH):
             request_scan(USER_REQUEST_PATH)
         else:
-            print(f"tlsmd: {USER_REQUEST_PATH} folder does not exist yet")
+            print(f"{TAG_WARN} tlsmd: {USER_REQUEST_PATH} folder does not exist yet")
         sleep(5) # busy-wait relief
 
 def queue_worker():
@@ -70,7 +92,7 @@ def queue_worker():
             break
 def main():
     uid = getuid()
-    print("TLSMD running for user", uid)
+    print(f"{TAG_INFO} TLSMD running for user", uid)
     t = threading.Thread(target=queue_worker)
     t.start()
     register_watchdog(uid)
@@ -83,13 +105,13 @@ def main():
             try:
                 request_queue.put_nowait(info.si_status)
             except Full:
-                print("WARNING: request queue is FULL ! request will be lost !")
+                print(f"{TAG_WARN} request queue is FULL ! request will be lost !")
         except InterruptedError:
             print("We were interrupted!")
             break
 
     t.join()
-    print("Goodbye.")
+    print(term_colors.BOLD + "Goodbye." + term_colors.ENDC)
 
 if __name__ == '__main__':
     main()
