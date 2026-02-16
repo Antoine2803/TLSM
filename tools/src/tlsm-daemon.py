@@ -1,9 +1,8 @@
 #!/usr/bin/python
 
-
-from os import mkdir, getuid, listdir, getpid
+from os import mkdir, getuid, listdir, getpid, write
 from os.path import join, isfile, isdir
-from sys import argv
+from sys import argv, stdout
 from time import sleep
 from queue import Queue, Full, ShutDown
 import signal
@@ -25,7 +24,6 @@ TAG_WARN = term_colors.BOLD + term_colors.WARNING + "[WARNING]" + term_colors.EN
 TAG_ERR = term_colors.BOLD + term_colors.FAIL + "[ERROR]" + term_colors.ENDC
 TAG_REQ = term_colors.BOLD + term_colors.OKGREEN + "[REQ]" + term_colors.ENDC
 TAG_REQD = term_colors.BOLD + term_colors.FAIL + "[REQ]" + term_colors.ENDC
-
 
 SYSFS_ROOT = "/sys/kernel/security/tlsm/"
 WATCHDOG_REGISTER_ENDPOINT = join(SYSFS_ROOT, "add_watchdog")
@@ -53,15 +51,18 @@ def answer_request(path, value):
 
 def process_request(path):
     print(f"{TAG_REQ} Got request: ", path)
-    with open(path) as f:
-        print(term_colors.BOLD + "-> " + f.read().strip('\n') + term_colors.ENDC)
-    answer = input(f"{term_colors.BOLD}Allow ? y/n{term_colors.ENDC}: ")
-    answer = '0' if answer in ['y', 'Y', ''] else '1'
-    if answer == '1':
-        print(f"{TAG_REQD} DENYING REQUEST")
-    else:
-        print(f"{TAG_REQ} ALLOWING REQUEST")
-    answer_request(path, answer)
+    try:
+        with open(path) as f:
+            print(term_colors.BOLD + "-> " + f.read().strip('\n') + term_colors.ENDC)
+        answer = input(f"{term_colors.BOLD}Allow ? y/n{term_colors.ENDC}: ")
+        answer = '0' if answer in ['y', 'Y', ''] else '1'
+        if answer == '1':
+            print(f"{TAG_REQD} DENYING REQUEST")
+        else:
+            print(f"{TAG_REQ} ALLOWING REQUEST")
+        answer_request(path, answer)
+    except Exception as e:
+        print(f"{TAG_ERR} Failed to open request file, probably timeout. {e}")
 
 def request_scan(user_request_fpath):
     files = [ join(user_request_fpath, f) for f in listdir(user_request_fpath) if isfile(join(user_request_fpath, f))]
@@ -73,7 +74,7 @@ def request_scan(user_request_fpath):
             print(f"{TAG_WARN} Request queue is full. request will be dropped")
 
 def sig_handler(signum, frame):
-  print(f"{TAG_ERR} Oops, something went wrong. This handler shouldn't have been called")
+    write(stdout.fileno(), b"[ERROR] Oops, something went wrong. This handler shouldn't have been called")
 
 def watchdog(uid: int):
     while True:
@@ -90,6 +91,7 @@ def queue_worker():
             process_request(join(USER_REQUEST_PATH, f"request_{req}"))
         except ShutDown:
             break
+
 def main():
     uid = getuid()
     print(f"{TAG_INFO} TLSMD running for user", uid)
@@ -99,19 +101,23 @@ def main():
     signal.signal(signal.SIGUSR1, sig_handler) # actually will never be called 
                                                # but necessary because not binding a handler 
                                                # exits the program on reception of the signal
-    while True:
-        try:
-            info = signal.sigwaitinfo([signal.SIGUSR1])
+    try:
+        while True:
             try:
-                if info.si_pid == 0 and info.si_uid==0: #ensuring the signal has been sent by the kernel
-                    request_queue.put_nowait(info.si_status)
-            except Full:
-                print(f"{TAG_WARN} request queue is FULL ! request will be lost !")
-        except InterruptedError:
-            print("We were interrupted!")
-            break
-
-    t.join()
+                info = signal.sigwaitinfo([signal.SIGUSR1])
+                try:
+                    if info.si_pid == 0 and info.si_uid==0: #ensuring the signal has been sent by the kernel
+                        request_queue.put_nowait(info.si_status)
+                except Full:
+                    print(stdout, f"{TAG_WARN} request queue is FULL ! request will be lost !")
+            except InterruptedError:
+                print("We were interrupted!")
+                break
+    except KeyboardInterrupt as e:
+        print(f"{TAG_INFO} received " + str(e))
+        request_queue.shutdown()
+        t.join()
+    
     print(term_colors.BOLD + "Goodbye." + term_colors.ENDC)
 
 if __name__ == '__main__':
