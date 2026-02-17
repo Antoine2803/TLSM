@@ -92,8 +92,10 @@ static ssize_t tlsm_write(struct file *file, const char __user *buf,
 		{
 			int res = tlsm_plist_add(tlsm_policies, p);
 
-			if (res != 0)
+			if (res != 0) {
 				printk(KERN_ERR "[TLSM][FS] cannot add new rule");
+				tlsm_policy_free(p);
+			}
 		}
 	}
 	else if (strncmp((const char *)&file->f_path.dentry->d_iname, "del_policy", 10) == 0 && strlen((const char *)&file->f_path.dentry->d_iname) == 10)

@@ -25,6 +25,7 @@ int process_policy(struct policy *pol, struct access access_request)
 
         char *exe_path = "unknown";
         char exe_buf[512];
+        struct task_struct *task = get_current();
         struct file *exe_file = get_task_exe_file(task);
         if (exe_file)
         {
