@@ -2,13 +2,13 @@
 
 from os import mkdir, getuid, listdir, getpid, write
 from os.path import join, isfile, isdir
-from sys import argv, stdout
+from sys import argv, stdout, stdin
 from time import sleep
 from queue import Queue, Full, ShutDown
 import signal
 import threading
 import subprocess
-
+import termios
 
 class term_colors:
     HEADER = '\033[95m'
@@ -68,6 +68,7 @@ def process_request(path):
             print(term_colors.BOLD + "-> " + req_str + term_colors.ENDC)
             send_notify(req_str)
 
+        termios.tcflush(stdin, termios.TCIOFLUSH) # flush stdin before input
         answer = input(f"{term_colors.BOLD}Allow ? y/n{term_colors.ENDC}: ")
         answer = '0' if answer in ['y', 'Y', ''] else '1'
         if answer == '1':
