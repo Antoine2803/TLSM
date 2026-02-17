@@ -1,5 +1,4 @@
 #include <linux/semaphore.h>
-#include <linux/file.h>
 
 #include "tlsm.h"
 #include "access.h"
@@ -23,21 +22,7 @@ int process_policy(struct policy *pol, struct access access_request)
         kuid_t uid;
         uid = current_uid();
 
-        char *exe_path = "unknown";
-        char exe_buf[512];
-        struct task_struct *task = get_current();
-        struct file *exe_file = get_task_exe_file(task);
-        if (exe_file)
-        {
-            char *tmp = d_path(&exe_file->f_path, exe_buf, sizeof(exe_buf));
-            if (!IS_ERR(tmp))
-                exe_path = tmp;
-
-            fput(exe_file);
-        }
-
-        access_request.subject = (char *)kmalloc(strlen(exe_path) + 1, GFP_KERNEL);
-        memcpy(access_request.subject, exe_path, strlen(exe_path) + 1);
+        access_request.subject = get_current_exe_path(get_current());
 
         if (__kuid_val(uid) == 0) // Don't block root actions for now
             return 0;
@@ -135,4 +120,19 @@ rejected:
     printk(KERN_DEBUG "[TLSM][ACCESS][BLOCK] %s %s %s (%llu time)", comm, tlsm_ops2str(access_request.op), access_request.object, ts->hit_count);
     // rejecting operation
     return 1;
+}
+
+int allow_req_fs_op(struct task_struct *t)
+{
+    char *exe_path = get_current_exe_path(t);
+
+    if (strcmp(exe_path, CONFIG_SECURITY_TLSM_WATCHDOG) != 0)
+    {
+        printk(KERN_DEBUG "[TLSM][ERROR] %s is trying to do an unauthorized operation on the fs request", exe_path);
+        kfree(exe_path);
+        return 1;
+    }
+
+    kfree(exe_path);
+    return 0;
 }

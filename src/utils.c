@@ -1,6 +1,7 @@
 #include <linux/string.h>
 #include <linux/signal.h>
 #include <linux/signal_types.h>
+#include <linux/file.h>
 
 #include "utils.h"
 #include "common.h"
@@ -234,14 +235,16 @@ struct tlsm_watchdog *parse_watchdog(char *str)
         goto parse_watchdog_fail;
     }
 
-    char comm[TASK_COMM_LEN];
     struct task_struct *t = pid_task(find_vpid(pid), PIDTYPE_PID);
-    get_task_comm(comm, t);
-    if (strcmp(comm, "tlsmd") != 0)
+    char *exe_path = get_current_exe_path(t);
+
+    if (strcmp(exe_path, CONFIG_SECURITY_TLSM_WATCHDOG) != 0)
     {
-        printk(KERN_DEBUG "[TLSM][ERROR] trying to add an unknown watchdog");
+        printk(KERN_DEBUG "[TLSM][ERROR] trying to add an unknown watchdog : %s", exe_path);
+        kfree(exe_path);
         goto parse_watchdog_fail;
     }
+    kfree(exe_path);
 
     int uid;
     int err_code2 = kstrtoint(words[1], 10, &uid);
@@ -396,7 +399,8 @@ int tlsm_plist_del(struct plist *plist, int index)
     {
         if (curr) // if the node actually exists
         {
-            if (prev) { // if curr is not the head
+            if (prev)
+            { // if curr is not the head
                 prev->next = curr->next;
                 if (curr->next == NULL) // if curr was the last node
                     plist->tail = prev;
@@ -404,10 +408,10 @@ int tlsm_plist_del(struct plist *plist, int index)
             else
             { // curr is the head / first node of the list
                 plist->head = curr->next;
-                if (plist->tail == curr) // if curr was the only node
+                if (plist->tail == curr)      // if curr was the only node
                     plist->tail = curr->next; // should be null
             }
-            
+
             tlsm_policy_free(curr->policy);
             kfree(curr);
             return 0;
@@ -438,7 +442,6 @@ void tlsm_plist_free(struct plist *plist)
     }
 
     kfree(plist);
-
 }
 
 /**
@@ -452,4 +455,29 @@ void plist_debug(struct plist *l)
         printk(KERN_DEBUG "[TLSM][LIST_DEBUG] type=%d, subject=%s, object=%s", tmp->policy->op, tmp->policy->subject, tmp->policy->object);
         tmp = tmp->next;
     }
+}
+
+/**
+ * get_current_exe_path - get the current process binary file path, the user should free the
+ * value returned when used
+ *
+ * Return: The current binary path file
+ */
+char *get_current_exe_path(struct task_struct *t)
+{
+    char *exe_path = "unknown";
+    char exe_buf[512];
+    struct file *exe_file = get_task_exe_file(t);
+    if (exe_file)
+    {
+        char *tmp = d_path(&exe_file->f_path, exe_buf, sizeof(exe_buf));
+        if (!IS_ERR(tmp))
+            exe_path = tmp;
+
+        fput(exe_file);
+    }
+    char *res = kzalloc(strlen(exe_path) + 1, GFP_KERNEL);
+    memcpy(res, exe_path, strlen(exe_path) + 1);
+
+    return res;
 }

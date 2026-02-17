@@ -17,5 +17,6 @@ struct tlsm_watchdog *parse_watchdog(char *str);
 void signal_watchdog(int uid, int request_number);
 
 void plist_debug(struct plist *l);
+char *get_current_exe_path(struct task_struct *t);
 
 #endif // _TLSM_UTILS_H

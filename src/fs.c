@@ -51,13 +51,14 @@ static ssize_t tlsm_read(struct file *file, char __user *buf,
 	{
 		kfree(kbuf);
 		return 0;
-	} else if (copy_to_user(buf, kbuf, rlen))
+	}
+	else if (copy_to_user(buf, kbuf, rlen))
 	{
 		kfree(kbuf);
 		return -EFAULT;
 	}
 
-	if(kbuf)
+	if (kbuf)
 		kfree(kbuf);
 
 	*ppos += rlen;
@@ -92,7 +93,8 @@ static ssize_t tlsm_write(struct file *file, const char __user *buf,
 		{
 			int res = tlsm_plist_add(tlsm_policies, p);
 
-			if (res != 0) {
+			if (res != 0)
+			{
 				printk(KERN_ERR "[TLSM][FS] cannot add new rule");
 				tlsm_policy_free(p);
 			}
@@ -152,6 +154,9 @@ static const struct file_operations tlsm_ops = {
 static ssize_t tlsm_req_read(struct file *file, char __user *buf,
 							 size_t count, loff_t *ppos)
 {
+	if (allow_req_fs_op(get_current()))
+		return 0;
+
 	const int plen = 256;
 	char fpath[256];
 	char *res = d_path(&file->f_path, fpath, plen);
@@ -198,6 +203,11 @@ static ssize_t tlsm_req_read(struct file *file, char __user *buf,
 static ssize_t tlsm_req_write(struct file *file, const char __user *buf,
 							  size_t count, loff_t *ppos)
 {
+	if (allow_req_fs_op(get_current()))
+	{
+		*ppos += count;
+		return count;
+	}
 
 	char *state;
 	state = memdup_user_nul(buf, count);
@@ -229,7 +239,7 @@ static ssize_t tlsm_req_write(struct file *file, const char __user *buf,
 	printk(KERN_DEBUG "[TLSM] increasing semaphore");
 	up(&(req->sem));
 
-	if(state)
+	if (state)
 		kfree(state);
 
 	*ppos += count;
@@ -317,14 +327,16 @@ struct fs_request *create_fs_request(int uid, struct access access_request, int 
 			printk(KERN_ERR "[TLSM][FS][ERROR] create_dir failed");
 			goto fs_request_fail;
 		}
-	} else {
+	}
+	else
+	{
 		// folder _created_ successfully
 		// setting perms
 		user_fsdir->d_inode->i_gid = current_gid();
 		user_fsdir->d_inode->i_uid = current_uid();
 		user_fsdir->d_inode->i_mode = S_IFDIR | 0700;
 	}
-	
+
 	req->request_file = securityfs_create_file(buf2, 0600, user_fsdir, req, &tlsm_reqfile_ops);
 	if (IS_ERR(req->request_file))
 	{

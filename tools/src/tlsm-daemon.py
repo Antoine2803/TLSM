@@ -55,12 +55,16 @@ def register_watchdog(uid):
 
 def answer_request(path, value):
     try:
-        print(f"{TAG_INFO} Answering request via securityfs")
         f = open(path, 'w')
         f.write(str(value))
         f.close()
+        if value == '1':
+            print(f"{TAG_REQD} DENYING REQUEST")
+        else:
+            print(f"{TAG_REQ} ALLOWING REQUEST")
+        print(f"{TAG_INFO} Answering request via securityfs")
     except Exception as e:
-        print(f"{TAG_WARN} Failed to write to request file {path}. Request probably timed out\n", str(e))
+        print(f"{TAG_WARN} Failed to write to request file. Request probably timed out (denied by default)\n", str(e))
 
 def process_request(path):
     print(f"{TAG_REQ} Got request: ", path)
@@ -73,10 +77,6 @@ def process_request(path):
         termios.tcflush(stdin, termios.TCIOFLUSH) # flush stdin before input
         answer = input(f"{term_colors.BOLD}Allow ? y/n{term_colors.ENDC}: ")
         answer = '0' if answer in ['y', 'Y', ''] else '1'
-        if answer == '1':
-            print(f"{TAG_REQD} DENYING REQUEST")
-        else:
-            print(f"{TAG_REQ} ALLOWING REQUEST")
         answer_request(path, answer)
     except Exception as e:
         print(f"{TAG_ERR} Failed to open request file, probably timeout. {e}")
