@@ -8,6 +8,7 @@ license=('GPL-3.0-only')
 depends=(
   python
   libnotify
+  python-pam
 )
 makedepends=(
   git

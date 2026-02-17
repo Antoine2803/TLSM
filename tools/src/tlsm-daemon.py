@@ -9,6 +9,8 @@ import signal
 import threading
 import subprocess
 import termios
+import pam
+from getpass import getpass
 
 class term_colors:
     HEADER = '\033[95m'
@@ -108,32 +110,39 @@ def queue_worker():
             break
 
 def main():
-    uid = getuid()
-    print(f"{TAG_INFO} TLSMD running for user", uid)
-    t = threading.Thread(target=queue_worker)
-    t.start()
-    register_watchdog(uid)
-    signal.signal(signal.SIGUSR1, sig_handler) # actually will never be called 
-                                               # but necessary because not binding a handler 
-                                               # exits the program on reception of the signal
-    try:
-        while True:
-            try:
-                info = signal.sigwaitinfo([signal.SIGUSR1])
+
+    username = input("Username : ")
+    password = getpass()
+    p = pam.authenticate(username, password)
+    if(p):    
+        uid = getuid()
+        print(f"{TAG_INFO} TLSMD running for user", uid)
+        t = threading.Thread(target=queue_worker)
+        t.start()
+        register_watchdog(uid)
+        signal.signal(signal.SIGUSR1, sig_handler) # actually will never be called 
+                                                # but necessary because not binding a handler 
+                                                # exits the program on reception of the signal
+        try:
+            while True:
                 try:
-                    if info.si_pid == 0 and info.si_uid==0: #ensuring the signal has been sent by the kernel
-                        request_queue.put_nowait(info.si_status)
-                except Full:
-                    print(stdout, f"{TAG_WARN} request queue is FULL ! request will be lost !")
-            except InterruptedError:
-                print("We were interrupted!")
-                break
-    except KeyboardInterrupt as e:
-        print(f"{TAG_INFO} received " + str(e))
-        request_queue.shutdown()
-        t.join()
-    
-    print(term_colors.BOLD + "Goodbye." + term_colors.ENDC)
+                    info = signal.sigwaitinfo([signal.SIGUSR1])
+                    try:
+                        if info.si_pid == 0 and info.si_uid==0: #ensuring the signal has been sent by the kernel
+                            request_queue.put_nowait(info.si_status)
+                    except Full:
+                        print(stdout, f"{TAG_WARN} request queue is FULL ! request will be lost !")
+                except InterruptedError:
+                    print("We were interrupted!")
+                    break
+        except KeyboardInterrupt as e:
+            print(f"{TAG_INFO} received " + str(e))
+            request_queue.shutdown()
+            t.join()
+        
+        print(term_colors.BOLD + "Goodbye." + term_colors.ENDC)
+    else:
+        print(f"{TAG_ERR} Authentication failed.")
 
 if __name__ == '__main__':
     main()
