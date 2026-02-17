@@ -7,6 +7,8 @@ from time import sleep
 from queue import Queue, Full, ShutDown
 import signal
 import threading
+import subprocess
+
 
 class term_colors:
     HEADER = '\033[95m'
@@ -31,6 +33,15 @@ USER_REQUEST_PATH = join(SYSFS_ROOT, "user_" + str(getuid()))
 
 request_queue = Queue()
 
+def send_notify(req_str: str):
+    try:
+        subprocess.run(["/usr/bin/notify-send", 
+                    "--app-name=TLSMD",
+                    "--icon=info", 
+                    "Your attention is required :\n" + req_str])
+    except Exception as e:
+        print(f"{TAG_WARN} libnotify failed. cannot send desktop notification. ({e})")
+
 def register_watchdog(uid):
     try:
         print(f"{TAG_INFO} Registering watchdog for user {uid} via securityfs")
@@ -53,7 +64,10 @@ def process_request(path):
     print(f"{TAG_REQ} Got request: ", path)
     try:
         with open(path) as f:
-            print(term_colors.BOLD + "-> " + f.read().strip('\n') + term_colors.ENDC)
+            req_str = f.read().strip('\n')
+            print(term_colors.BOLD + "-> " + req_str + term_colors.ENDC)
+            send_notify(req_str)
+
         answer = input(f"{term_colors.BOLD}Allow ? y/n{term_colors.ENDC}: ")
         answer = '0' if answer in ['y', 'Y', ''] else '1'
         if answer == '1':

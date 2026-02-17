@@ -331,35 +331,6 @@ void tlsm_policy_free(struct policy *policy)
 }
 
 /**
- * tlsm_policy_dup - allocate a new policy and copy from a existing one
- *
- * returns NULL on failure
- */
-struct policy *tlsm_policy_dup(struct policy *policy)
-{
-    struct policy *p;
-    p = kmalloc(sizeof(*p), GFP_KERNEL);
-    if (!p)
-        return NULL;
-
-    p->subject = kstrdup(policy->subject, GFP_KERNEL);
-    if (!p->subject)
-    {
-        kfree(p);
-        return NULL;
-    }
-    p->object = kstrdup(policy->object, GFP_KERNEL);
-    if (!p->object)
-    {
-        kfree(p->subject);
-        kfree(p);
-        return NULL;
-    }
-
-    return p;
-}
-
-/**
  * tlsm_new_plist - Creates a new policy list.
  *
  * Returns a pointer to the allocated list, NULL on failure.
@@ -425,18 +396,18 @@ int tlsm_plist_del(struct plist *plist, int index)
     {
         if (curr) // if the node actually exists
         {
-            if (prev) // if curr is node the firs node of the list
-            {         // curr is not the head
+            if (prev) { // if curr is not the head
                 prev->next = curr->next;
-                if (curr->next == NULL)
+                if (curr->next == NULL) // if curr was the last node
                     plist->tail = prev;
             }
             else
             { // curr is the head / first node of the list
                 plist->head = curr->next;
                 if (plist->tail == curr) // if curr was the only node
-                    plist->tail = NULL;
+                    plist->tail = curr->next; // should be null
             }
+            
             tlsm_policy_free(curr->policy);
             kfree(curr);
             return 0;
@@ -452,20 +423,22 @@ int tlsm_plist_del(struct plist *plist, int index)
  */
 void tlsm_plist_free(struct plist *plist)
 {
-    // if plist is not null
+    // if plist is null
     if (!plist)
         return;
 
     struct policy_node *curr = plist->head;
+    struct policy_node *temp = NULL;
     while (curr)
     {
-        struct policy_node *temp = curr->next;
+        temp = curr->next;
         tlsm_policy_free(curr->policy);
         kfree(curr);
         curr = temp;
     }
 
     kfree(plist);
+
 }
 
 /**

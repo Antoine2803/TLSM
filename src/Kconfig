@@ -4,4 +4,13 @@ config SECURITY_TLSM
         default y
         help
           TLSM is a student LSM Project for implementing a simple LSM into the 
-          Linux kernel. Made with lots of love (and sweat) by A&A
+          Linux kernel. Made with lots of love (and sweat) by A&A.
+
+
+config SECURITY_TLSM_WATCHDOG
+        string "Location of userspace watchdog tool"
+        default "/usr/bin/tlsmd"
+        depends on SECURITY_TLSM
+        help
+            This is the default pathname of the userland companion program
+            to be used when using the interactive mode (the watchdog).
