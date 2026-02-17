@@ -28,11 +28,13 @@ package() {
   cp "tlsm-tools.py" "${pkgdir}/usr/bin/tlsm-py"
   chmod +x "${pkgdir}/usr/bin/tlsm-py"
 
-  cp "tlsm-daemon.py" "${pkgdir}/usr/bin/tlsmd"
-  chmod +x "${pkgdir}/usr/bin/tlsmd"
-
   mkdir -p "${pkgdir}/etc/tlsm"
   cp "policies.conf" "${pkgdir}/etc/tlsm/policies.conf"
+
+  cd ../dist
+  cp "tlsm-daemon" "${pkgdir}/usr/bin/tlsmd"
+  chmod +x "${pkgdir}/usr/bin/tlsmd"
+
 }
 
 sha256sums=('SKIP')
