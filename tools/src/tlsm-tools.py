@@ -60,9 +60,11 @@ def flush_policies():
     lines = 0
     with open(SYSFS_LIST, "r") as f:
         lines = sum(1 for _ in f)
+    print(f"{TAG_INFO} Detected", lines, "lines to delete")
     f = open(SYSFS_DEL, "w")
     for _ in range(lines):
         f.write('0')
+        f.flush()
     f.close()
 
 def apply_policies():
