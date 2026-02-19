@@ -4,6 +4,7 @@
 #include <linux/dcache.h>
 #include <linux/string.h>
 #include <linux/namei.h>
+#include <linux/limits.h>
 
 #include "fs.h"
 #include "tlsm.h"
@@ -16,8 +17,8 @@ struct dentry *tlsm_fs_root = NULL;
 static ssize_t tlsm_read(struct file *file, char __user *buf,
 						 size_t count, loff_t *ppos)
 {
-	const int plen = 256;
-	char fpath[256];
+	const int plen = PATH_MAX;
+	char fpath[plen];
 	char *res = d_path(&file->f_path, fpath, plen);
 	printk(KERN_DEBUG "[TLSM][FS] read to file %s, out buff size %lu", res, count);
 
@@ -35,6 +36,7 @@ static ssize_t tlsm_read(struct file *file, char __user *buf,
 		while (curr && count - pos)
 		{
 			struct policy *p = curr->policy;
+	
 			int j = scnprintf(&kbuf[pos], count - pos, "rule #%d : %s %s %s %s (hit count %lld)\n", i, tlsm_ops2str(p->op), tlsm_cat2str(p->category), p->subject, p->object, p->hit_count);
 			rlen += j;
 			pos += j;
@@ -68,9 +70,8 @@ static ssize_t tlsm_read(struct file *file, char __user *buf,
 static ssize_t tlsm_write(struct file *file, const char __user *buf,
 						  size_t count, loff_t *ppos)
 {
-	const int plen = 256;
-	char fpath[256];
-	char *res = d_path(&file->f_path, fpath, plen);
+	char fpath[PATH_MAX];
+	char *res = d_path(&file->f_path, fpath, PATH_MAX);
 	printk(KERN_DEBUG "[TLSM][FS] write to file %s", res);
 
 	char *state;
@@ -130,7 +131,7 @@ static ssize_t tlsm_write(struct file *file, const char __user *buf,
 			size_t bef = list_count_nodes(&tlsm_watchdogs);
 			list_add_tail(&nw->node, &tlsm_watchdogs);
 			size_t after = list_count_nodes(&tlsm_watchdogs);
-			printk(KERN_DEBUG "[TLSM][FS][ERROR] adding watchdog, %zu->%zu", bef, after);
+			printk(KERN_DEBUG "[TLSM][FS] Adding watchdog, %zu->%zu", bef, after);
 		}
 		else
 		{
@@ -157,9 +158,8 @@ static ssize_t tlsm_req_read(struct file *file, char __user *buf,
 	if (allow_req_fs_op(get_current()))
 		return 0;
 
-	const int plen = 256;
-	char fpath[256];
-	char *res = d_path(&file->f_path, fpath, plen);
+	char fpath[PATH_MAX];
+	char *res = d_path(&file->f_path, fpath, PATH_MAX);
 	printk(KERN_DEBUG "[TLSM][FS] read to file %s, out buff size %lu", res, count);
 
 	int rlen = 0;
@@ -214,8 +214,8 @@ static ssize_t tlsm_req_write(struct file *file, const char __user *buf,
 
 	struct fs_request *req = (struct fs_request *)file->f_inode->i_private;
 
-	const int plen = 256;
-	char fpath[256];
+	const int plen = PATH_MAX;
+	char fpath[PATH_MAX];
 	char *res = d_path(&file->f_path, fpath, plen);
 	printk(KERN_DEBUG "[TLSM] write to request file %s", res);
 

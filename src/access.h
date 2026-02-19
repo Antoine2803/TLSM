@@ -9,6 +9,7 @@ struct access
     tlsm_ops_t op;
     char *subject;
     char *object;
+    void *meta;
 };
 
 int process_policy(struct policy *pol, struct access access_request);

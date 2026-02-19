@@ -9,6 +9,8 @@
 #include <linux/inet.h>
 #include <linux/in6.h>
 #include <linux/un.h>
+#include <linux/limits.h>
+#include <linux/binfmts.h>
 
 #include "tlsm.h"
 #include "utils.h"
@@ -30,13 +32,12 @@ inline struct tlsm_task_security *get_task_security(struct task_struct *ts)
 struct plist *tlsm_policies;
 struct list_head tlsm_watchdogs;
 
-
 /* TLSM Operation hooks */
 /* these hooks are called on operations */
 static int tlsm_hook_open(struct file *f)
 {
-	const int buflen = 256;
-	char buf[256];
+	const int buflen = PATH_MAX;
+	char buf[PATH_MAX];
 
 	char *res = d_path(&f->f_path, buf, buflen);
 
@@ -89,13 +90,43 @@ static int tlsm_hook_sconnect(struct socket *sock, struct sockaddr *address, int
 	return __tlsm_hook_socket(sock, address, addrlen, TLSM_SOCKET_CONNECT);
 }
 
+/**
+ * Dangereux
+ */
+static int tlsm_hook_task_kill(struct task_struct *p, struct kernel_siginfo *info, int sig, const struct cred *cred)
+{
+
+	// struct access access_request;
+	// access_request.op = TLSM_SIGNAL;
+	// access_request.object = get_exe_path_for_task(p);
+
+	// return autorize_access(access_request);
+
+	return 0;
+}
+
+static int tlsm_hook_bprm_check_security(struct linux_binprm *bprm)
+{
+
+	char exe_path[PATH_MAX];
+	char *bin_path = get_exe_path_for_task(get_current());
+	char *res = d_path(&bprm->file->f_path, exe_path, PATH_MAX);
+
+	struct access access_request;
+	access_request.op = TLSM_EXECVE;
+	access_request.object = res;
+
+	kfree(bin_path);
+	return autorize_access(access_request);
+}
+
 /* TLSM security hooks */
 /* these hooks handle the allocation and destruction
  *of the opaque security struct */
 
 static int tlsm_task_allocate(struct task_struct *task, u64 clone_flags)
 {
-	struct tlsm_task_security* ts = get_task_security(task);
+	struct tlsm_task_security *ts = get_task_security(task);
 	ts->score = 100;
 	return 0;
 }
@@ -109,10 +140,13 @@ static struct security_hook_list hooks[] __ro_after_init = {
 	LSM_HOOK_INIT(file_open, tlsm_hook_open),
 	LSM_HOOK_INIT(socket_bind, tlsm_hook_sbind),
 	LSM_HOOK_INIT(socket_connect, tlsm_hook_sconnect),
+	LSM_HOOK_INIT(task_kill, tlsm_hook_task_kill),
+	LSM_HOOK_INIT(bprm_check_security, tlsm_hook_bprm_check_security),
 
 	// tlsm memory management hooks
 	LSM_HOOK_INIT(task_alloc, tlsm_task_allocate),
 	LSM_HOOK_INIT(task_free, tlsm_task_free),
+
 };
 
 static const struct lsm_id tlsm_lsmid = {
@@ -130,7 +164,7 @@ static int __init tlsm_init(void)
 		printk(KERN_ERR "[TLSM] failed to init policies !");
 	}
 	INIT_LIST_HEAD(&tlsm_watchdogs);
-	
+
 	return 0;
 }
 

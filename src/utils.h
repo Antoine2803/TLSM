@@ -17,7 +17,7 @@ struct tlsm_watchdog *parse_watchdog(char *str);
 void signal_watchdog(int uid, int request_number);
 
 void plist_debug(struct plist *l);
-char *get_current_exe_path(struct task_struct *t);
+char *get_exe_path_for_task(struct task_struct *t);
 
 void score_update(unsigned int* score, int delta);
 

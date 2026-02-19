@@ -30,21 +30,27 @@ typedef enum tlsm_ops
     TLSM_OP_UNDEFINED,
     TLSM_FILE_OPEN,
     TLSM_SOCKET_BIND,
-    TLSM_SOCKET_CONNECT
+    TLSM_SOCKET_CONNECT,
+    TLSM_SIGNAL,
+    TLSM_EXECVE,
 } tlsm_ops_t;
 
 static const struct
 {
     tlsm_ops_t val;
     const char *str;
-} op2str[] = {
-    {TLSM_OP_UNDEFINED, "undefined"},
-    {TLSM_FILE_OPEN, "open"},
-    {TLSM_SOCKET_BIND, "bind"},
-    {TLSM_SOCKET_CONNECT, "connect"},
+    const int argc;
+} op2data[] = {
+    {TLSM_OP_UNDEFINED, "undefined", 0},
+    {TLSM_FILE_OPEN, "open", 1},
+    {TLSM_SOCKET_BIND, "bind", 1},
+    {TLSM_SOCKET_CONNECT, "connect", 1},
+    {TLSM_SIGNAL, "signal", 0},
+    {TLSM_EXECVE, "execve", 1},
 };
 
 const char *tlsm_ops2str(tlsm_ops_t op);
 tlsm_ops_t str2tlsm_ops(const char *str);
+int tlsm_op2argc(tlsm_ops_t op);
 
 #endif /* TLSM_COMMON_H */

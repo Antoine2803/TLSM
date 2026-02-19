@@ -2,6 +2,7 @@
 #include <linux/signal.h>
 #include <linux/signal_types.h>
 #include <linux/file.h>
+#include <linux/limits.h>
 
 #include "utils.h"
 #include "common.h"
@@ -81,7 +82,7 @@ char **str_split(char *string, const char delimiter, int *out_count)
     if (count == 0)
         return NULL;
 
-    res = kmalloc_array(count, sizeof(char *), GFP_KERNEL);
+    res = kcalloc(count, sizeof(char *), GFP_KERNEL);
 
     if (!res)
         return NULL;
@@ -183,11 +184,24 @@ struct policy *parse_policy(char *rule)
     }
     kfree(words[2]);
 
+    int argc = tlsm_op2argc(op);
+    if (word_count < 3 + argc)
+        goto parse_policy_fail;
+
+    switch (argc)
+    {
+    case 1:
+        new_policy->object = words[3];
+        break;
+    default:
+        break;
+    }
     new_policy->subject = words[0];
     new_policy->category = category;
     new_policy->op = op;
-    new_policy->object = words[3];
-    free_karray_from(words, 4, word_count);
+
+
+    free_karray_from(words, 3 + argc, word_count);
 
     kfree(words);
 
@@ -236,7 +250,7 @@ struct tlsm_watchdog *parse_watchdog(char *str)
     }
 
     struct task_struct *t = pid_task(find_vpid(pid), PIDTYPE_PID);
-    char *exe_path = get_current_exe_path(t);
+    char *exe_path = get_exe_path_for_task(t);
 
     if (strcmp(exe_path, CONFIG_SECURITY_TLSM_WATCHDOG) != 0)
     {
@@ -458,15 +472,15 @@ void plist_debug(struct plist *l)
 }
 
 /**
- * get_current_exe_path - get the current process binary file path, the user should free the
+ * get_exe_path_for_task - get the current process binary file path, the user should free the
  * value returned when used
  *
  * Return: The current binary path file
  */
-char *get_current_exe_path(struct task_struct *t)
+char *get_exe_path_for_task(struct task_struct *t)
 {
     char *exe_path = "unknown";
-    char exe_buf[512];
+    char exe_buf[PATH_MAX];
     struct file *exe_file = get_task_exe_file(t);
     if (exe_file)
     {
@@ -482,27 +496,34 @@ char *get_current_exe_path(struct task_struct *t)
     return res;
 }
 
-
 /**
  * score_update - updates a task's score. Prevent overflow/underflow
- * input: 
+ * input:
  *      int* score: the score to update
- *      int delta: by how much to update the score. 
- * 
+ *      int delta: by how much to update the score.
+ *
  * If the score is too low to be decreased by delta, decrease by the maximum amount.
  * If the score is too high to be increased, do nothing
  */
-void score_update(unsigned int* score, int delta) {
-    if (delta < 0) {
-         if (*score > -delta) {
-            *score=*score+delta;
-         } else { // we would have an underflow, clamp to 0
-            *score = 0;
-         }
-    } else {
-        if (*score + delta > *score) {
+void score_update(unsigned int *score, int delta)
+{
+    if (delta < 0)
+    {
+        if (*score > -delta)
+        {
             *score = *score + delta;
-        } 
+        }
+        else
+        { // we would have an underflow, clamp to 0
+            *score = 0;
+        }
+    }
+    else
+    {
+        if (*score + delta > *score)
+        {
+            *score = *score + delta;
+        }
         // else: we have an overflow, do nothing
     }
 }

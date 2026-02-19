@@ -22,7 +22,7 @@ int process_policy(struct policy *pol, struct access access_request)
         kuid_t uid;
         uid = current_uid();
 
-        access_request.subject = get_current_exe_path(get_current());
+        access_request.subject = get_exe_path_for_task(get_current());
 
         if (__kuid_val(uid) == 0) // Don't block root actions for now
             return 0;
@@ -63,13 +63,12 @@ int process_policy(struct policy *pol, struct access access_request)
 
 int autorize_access(struct access access_request)
 {
-    char comm[TASK_COMM_LEN];
     struct policy_node *pointer = tlsm_policies->head;
 
     struct task_struct *task = get_current();
     struct tlsm_task_security *ts = get_task_security(task);
 
-    get_task_comm(comm, task);
+    char *exe_path = get_exe_path_for_task(task);
 
     struct policy *p;
     while (pointer)
@@ -77,7 +76,7 @@ int autorize_access(struct access access_request)
         p = pointer->policy;
         if (p->op == access_request.op)
         {
-            if (strncmp(comm, p->subject, strlen(p->subject)) == 0)
+            if (strncmp(exe_path, p->subject, strlen(p->subject)) == 0)
             {
                 switch (access_request.op)
                 {
@@ -91,7 +90,13 @@ int autorize_access(struct access access_request)
                     if (strncmp(access_request.object, p->object, strlen(p->object)) == 0 || strncmp(p->object, "any", strlen(p->object)) == 0)
                         goto apply;
                     break;
-
+                case TLSM_SIGNAL:
+                    goto apply;
+                    break;
+                case TLSM_EXECVE:
+                    if (strncmp(access_request.object, p->object, strlen(p->object)) == 0 || strncmp(p->object, "any", strlen(p->object)) == 0)
+                        goto apply;
+                    break;
                 default:
                     break;
                 }
@@ -105,6 +110,8 @@ int autorize_access(struct access access_request)
 
 apply:
     int answer = process_policy(p, access_request);
+    kfree(exe_path);
+
     if (answer == 0)
     {
         return 0;
@@ -118,14 +125,14 @@ rejected:
     ts->hit_count++;
     score_update(&ts->score, -1);
     p->hit_count++;
-    printk(KERN_DEBUG "[TLSM][ACCESS][BLOCK] %s %s %s (%llu time, %u score)", comm, tlsm_ops2str(access_request.op), access_request.object, ts->hit_count, ts->score);
+    printk(KERN_DEBUG "[TLSM][ACCESS][BLOCK] %s %s %s (%llu time, %u score)", exe_path, tlsm_ops2str(access_request.op), access_request.object, ts->hit_count, ts->score);
     // rejecting operation
     return 1;
 }
 
 int allow_req_fs_op(struct task_struct *t)
 {
-    char *exe_path = get_current_exe_path(t);
+    char *exe_path = get_exe_path_for_task(t);
 
     if (strcmp(exe_path, CONFIG_SECURITY_TLSM_WATCHDOG) != 0)
     {
