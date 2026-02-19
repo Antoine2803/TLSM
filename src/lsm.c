@@ -95,6 +95,8 @@ static int tlsm_hook_sconnect(struct socket *sock, struct sockaddr *address, int
 
 static int tlsm_task_allocate(struct task_struct *task, u64 clone_flags)
 {
+	struct tlsm_task_security* ts = get_task_security(task);
+	ts->score = 100;
 	return 0;
 }
 

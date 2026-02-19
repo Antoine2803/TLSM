@@ -116,8 +116,9 @@ apply:
 
 rejected:
     ts->hit_count++;
+    score_update(&ts->score, -1);
     p->hit_count++;
-    printk(KERN_DEBUG "[TLSM][ACCESS][BLOCK] %s %s %s (%llu time)", comm, tlsm_ops2str(access_request.op), access_request.object, ts->hit_count);
+    printk(KERN_DEBUG "[TLSM][ACCESS][BLOCK] %s %s %s (%llu time, %u score)", comm, tlsm_ops2str(access_request.op), access_request.object, ts->hit_count, ts->score);
     // rejecting operation
     return 1;
 }

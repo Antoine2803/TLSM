@@ -46,8 +46,12 @@ inline struct tlsm_task_security *get_task_security(struct task_struct *ts);
 
 struct tlsm_task_security
 {
-    /* when changing this struct, adjust tlsm_task_alloc et tlsm_task_free accordingly */
+    /* when changing this struct, adjust tlsm_task_alloc et tlsm_task_free accordingly 
+       if using pointers to allocated data structures
+    */
     unsigned long long hit_count;
+    unsigned int score;
+
 };
 
 extern struct plist *tlsm_policies; // linked list of active policies

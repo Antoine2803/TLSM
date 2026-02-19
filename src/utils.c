@@ -481,3 +481,28 @@ char *get_current_exe_path(struct task_struct *t)
 
     return res;
 }
+
+
+/**
+ * score_update - updates a task's score. Prevent overflow/underflow
+ * input: 
+ *      int* score: the score to update
+ *      int delta: by how much to update the score. 
+ * 
+ * If the score is too low to be decreased by delta, decrease by the maximum amount.
+ * If the score is too high to be increased, do nothing
+ */
+void score_update(unsigned int* score, int delta) {
+    if (delta < 0) {
+         if (*score > -delta) {
+            *score=*score+delta;
+         } else { // we would have an underflow, clamp to 0
+            *score = 0;
+         }
+    } else {
+        if (*score + delta > *score) {
+            *score = *score + delta;
+        } 
+        // else: we have an overflow, do nothing
+    }
+}
