@@ -6,6 +6,7 @@ typedef enum tlsm_category
     TLSM_ALLOW, // must be first so TLSM_ALLOW equals 0 !!
     TLSM_DENY,
     TLSM_ASK,
+    TLSM_ANALYZE,
 } tlsm_category_t;
 
 static const struct
@@ -16,6 +17,8 @@ static const struct
     {TLSM_ALLOW, "allow"},
     {TLSM_DENY, "deny"},
     {TLSM_ASK, "ask"},
+    {TLSM_ANALYZE, "analyze"},
+
 };
 
 const char *tlsm_cat2str(tlsm_category_t op);
@@ -25,6 +28,9 @@ tlsm_category_t str2tlsm_cat(const char *str);
 /* TLSM OPERATIONS */
 /* to add a new operation, one must *at least* add the operation in the enum and in the op2str table */
 
+#define TLSM_OPS_LEN 6
+
+// must be synchronized with the enum in TLSMD !!
 typedef enum tlsm_ops
 {
     TLSM_OP_UNDEFINED,

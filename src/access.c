@@ -7,48 +7,80 @@
 
 static unsigned long long request_count = 0;
 
+int tlsmd_request(tlsm_category_t cat, struct access *access_request)
+{
+    // ask user
+    kuid_t uid;
+    uid = current_uid();
+
+    if (__kuid_val(uid) == 0) // Don't block root actions for now
+        return 0;
+
+    if (cat == TLSM_ASK)
+    {
+        access_request->supervised = 1;
+    }
+    else
+    {
+        access_request->supervised = 0;
+    }
+
+    struct task_struct *curr = get_current();
+    struct tlsm_task_security *ts = get_task_security(curr);
+    struct op_stat *stats;
+    stats = kzalloc(sizeof(*stats) * TLSM_OPS_LEN, GFP_KERNEL);
+    memcpy(stats, ts->stats, sizeof(struct op_stat) * TLSM_OPS_LEN);
+
+    access_request->subject = get_exe_path_for_task(curr);
+    access_request->score = ts->score;
+    access_request->score_delta = DEFAULT_SCORE_UPDATE;
+
+    struct fs_request *fs_req = create_fs_request(__kuid_val(uid), *access_request, stats, request_count++);
+    if (!fs_req)
+    {
+        kfree(stats);
+        kfree(access_request->subject);
+        return -EPERM;
+    }
+
+    int ret = down_timeout(&(fs_req->sem), msecs_to_jiffies(request_timeout * 1000));
+    if (ret == 0 && fs_req->answer != NULL)
+    {
+        // acquire was successfull
+        int res = fs_req->answer->allow;
+        printk(KERN_DEBUG "[TLSM][ACCESS] semaphore OK, got answer %d", res);
+        access_request->score_delta = fs_req->answer->score_delta;
+        kfree(stats);
+        kfree(access_request->subject);
+        remove_fs_file(fs_req);
+        return -res;
+    }
+    else
+    {
+        // timeout or other issue
+        printk(KERN_DEBUG "[TLSM][ACCESS] semaphore timeout or answer parsing failure (or another, unspecified issue)");
+        kfree(stats);
+        kfree(access_request->subject);
+        remove_fs_file(fs_req);
+        return -EPERM;
+    }
+}
+
 /**
  * process_policy - process a policy depending on its category (allow, deny, ask)
  *
  * Return 0 if the operation is allowed or -EPERM is not allowed.
  * For "ask" policies, ask the user via security fs. If answer times out or error, default to -EPERM.
  */
-int process_policy(struct policy *pol, struct access access_request)
+int process_policy(struct policy *pol, struct access* access_request)
 {
     switch (pol->category)
     {
+    case TLSM_ANALYZE:
+        return tlsmd_request(TLSM_ANALYZE, access_request);
+        break;
     case TLSM_ASK:
-        // ask user
-        kuid_t uid;
-        uid = current_uid();
-
-        access_request.subject = get_exe_path_for_task(get_current());
-
-        if (__kuid_val(uid) == 0) // Don't block root actions for now
-            return 0;
-
-        struct fs_request *fs_req = create_fs_request(__kuid_val(uid), access_request, request_count++);
-        if (!fs_req)
-            return -EPERM;
-
-        int ret = down_timeout(&(fs_req->sem), msecs_to_jiffies(request_timeout * 1000));
-        if (ret == 0)
-        {
-            // acquire was successfull
-            printk(KERN_DEBUG "[TLSM][ACCESS] semaphore OK, got answer %s", tlsm_cat2str(fs_req->answer));
-            remove_fs_file(fs_req);
-            kfree(access_request.subject);
-            return -(int)fs_req->answer;
-        }
-        else
-        {
-            // timeout or other issue
-            printk(KERN_DEBUG "[TLSM][ACCESS] semaphore timeout");
-
-            kfree(access_request.subject);
-            remove_fs_file(fs_req);
-            return -EPERM;
-        }
+        return tlsmd_request(TLSM_ASK, access_request);
         break;
 
     case TLSM_ALLOW:
@@ -74,7 +106,12 @@ int autorize_access(struct access access_request)
     while (pointer)
     {
         p = pointer->policy;
-        if (p->op == access_request.op)
+        if (p->category == TLSM_ANALYZE)
+        {
+            if (strcmp(exe_path, p->subject) == 0)
+                goto apply;
+        }
+        else if (p->op == access_request.op)
         {
             if (strncmp(exe_path, p->subject, strlen(p->subject)) == 0)
             {
@@ -105,29 +142,30 @@ int autorize_access(struct access access_request)
         pointer = pointer->next;
     }
 
-    // allowing operation
+    // allowing operation if not handled
     return 0;
 
 apply:
-    int answer = process_policy(p, access_request);
-    kfree(exe_path);
+    int answer = process_policy(p, &access_request);
+    ts->stats[access_request.op].total++;
+
+    score_update(&ts->score, access_request.score_delta);
 
     if (answer == 0)
     {
+        kfree(exe_path);
         return 0;
     }
     else
     {
-        goto rejected;
-    }
+        ts->stats[access_request.op].deny++;
+        p->hit_count++;
+        printk(KERN_DEBUG "[TLSM][ACCESS][BLOCK] %s %s %s (%llu time, %u score)", exe_path, tlsm_ops2str(access_request.op), access_request.object, ts->stats[access_request.op].deny, ts->score);
+        // rejecting operation
+        kfree(exe_path);
 
-rejected:
-    ts->hit_count++;
-    score_update(&ts->score, -1);
-    p->hit_count++;
-    printk(KERN_DEBUG "[TLSM][ACCESS][BLOCK] %s %s %s (%llu time, %u score)", exe_path, tlsm_ops2str(access_request.op), access_request.object, ts->hit_count, ts->score);
-    // rejecting operation
-    return 1;
+        return -EPERM;
+    }
 }
 
 int allow_req_fs_op(struct task_struct *t)

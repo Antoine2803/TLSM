@@ -2,7 +2,7 @@
 
 from os import mkdir, getuid, listdir, getpid, write
 from os.path import join, isfile, isdir
-from sys import argv, stdout, stdin
+from sys import argv, stdout, stdin, exit
 from time import sleep
 from queue import Queue, Full, ShutDown
 import signal
@@ -10,7 +10,33 @@ import threading
 import subprocess
 import termios
 import pam
+from enum import IntEnum
 from getpass import getpass
+
+ALLOW_STR="allow"
+DENY_STR="deny"
+
+class TLSM_OPS(IntEnum):
+    # must be synchronized with the enum in tlsm/common.h !!
+    TLSM_OP_UNDEFINED = 0
+    TLSM_FILE_OPEN = 1
+    TLSM_SOCKET_BIND = 2
+    TLSM_SOCKET_CONNECT = 3
+    TLSM_SIGNAL = 4
+    TLSM_EXECVE = 5
+
+class Stats:
+    def __init__(self, stat_list):
+        self.stats = dict()
+        for op in TLSM_OPS:
+            self.stats[op] = stat_list[op.value]
+
+    def __str__(self):
+        acc = ""
+        for op in TLSM_OPS:
+            acc += " - " + op.name + " : " + str(self.stats[op])
+            acc += "\n"
+        return acc.strip("\n")
 
 class term_colors:
     HEADER = '\033[95m'
@@ -53,31 +79,59 @@ def register_watchdog(uid):
     except Exception as e:
         print(f"{TAG_ERR} Failed to register watchdog", str(e))
 
-def answer_request(path, value):
+def answer_request(path, value, score_delta):
     try:
+        print(f"{TAG_INFO} Answering request via securityfs")
         f = open(path, 'w')
-        f.write(str(value))
+        f.write(f"{value} {score_delta}")
         f.close()
         if value == '1':
             print(f"{TAG_REQD} DENYING REQUEST")
         else:
             print(f"{TAG_REQ} ALLOWING REQUEST")
-        print(f"{TAG_INFO} Answering request via securityfs")
     except Exception as e:
         print(f"{TAG_WARN} Failed to write to request file. Request probably timed out (denied by default)\n", str(e))
+
+def analyze_request(req_str: str, stats: Stats, score: int):
+    print("perform autonomous analysis of request / malware detection / classification model here")
+    return DENY_STR # deny
 
 def process_request(path):
     print(f"{TAG_REQ} Got request: ", path)
     try:
-        with open(path) as f:
-            req_str = f.read().strip('\n')
-            print(term_colors.BOLD + "-> " + req_str + term_colors.ENDC)
-            send_notify(req_str)
+        f = open(path)
+        req_str_list = f.read().strip('\n').split('\n')
+        f.close()
+        
+        supervized = bool(req_str_list[0].split(" ")[0])
+        score = int(req_str_list[0].split(" ")[1])
+        req_str = req_str_list[1]
+        stats = Stats([[int(i) for i in d.split(" ")] for d in req_str_list[2:]])
+        print(term_colors.BOLD + "-> " + req_str + f"(score: {score})" + term_colors.ENDC)
+        print(stats)
 
-        termios.tcflush(stdin, termios.TCIOFLUSH) # flush stdin before input
-        answer = input(f"{term_colors.BOLD}Allow ? y/n{term_colors.ENDC}: ")
-        answer = '0' if answer in ['y', 'Y', ''] else '1'
-        answer_request(path, answer)
+        answer = DENY_STR
+        score_delta = 0
+        if supervized: # ask the human
+            send_notify(req_str)
+            termios.tcflush(stdin, termios.TCIOFLUSH) # flush stdin before input
+            answer = input(f"{term_colors.BOLD}Allow ? y/n{term_colors.ENDC}: ")
+            answer = ALLOW_STR if answer in ['y', 'Y', ''] else DENY_STR
+        
+            termios.tcflush(stdin, termios.TCIOFLUSH) # flush stdin before input
+            sd_str = input(f"{term_colors.BOLD}Score update ? (default 0){term_colors.ENDC}: ")
+            if sd_str != '':
+                try:
+                    score_delta = int(sd_str)
+                except:
+                    print(f"{TAG_ERR} Failed to parse provided score.")
+
+        else: # ask the machine
+            answer = analyze_request(req_str, stats, score)
+            pass
+
+        answer_request(path, answer, score_delta)
+
     except Exception as e:
         print(f"{TAG_ERR} Failed to open request file, probably timeout. {e}")
 
@@ -109,40 +163,49 @@ def queue_worker():
         except ShutDown:
             break
 
-def main():
-
+def auth():
     username = input("Username : ")
     password = getpass()
-    p = pam.authenticate(username, password)
-    if(p):    
-        uid = getuid()
-        print(f"{TAG_INFO} TLSMD running for user", uid)
-        t = threading.Thread(target=queue_worker)
-        t.start()
-        register_watchdog(uid)
-        signal.signal(signal.SIGUSR1, sig_handler) # actually will never be called 
-                                                # but necessary because not binding a handler 
-                                                # exits the program on reception of the signal
-        try:
-            while True:
-                try:
-                    info = signal.sigwaitinfo([signal.SIGUSR1])
-                    try:
-                        if info.si_pid == 0 and info.si_uid==0: #ensuring the signal has been sent by the kernel
-                            request_queue.put_nowait(info.si_status)
-                    except Full:
-                        print(stdout, f"{TAG_WARN} request queue is FULL ! request will be lost !")
-                except InterruptedError:
-                    print("We were interrupted!")
-                    break
-        except KeyboardInterrupt as e:
-            print(f"{TAG_INFO} received " + str(e))
-            request_queue.shutdown()
-            t.join()
+    return pam.authenticate(username, password)
+
+def main():
+
+    for i in range(3):
+        if(auth()):
+            break
+        else:
+            print(f"{TAG_ERR} Authentication failed.")
         
-        print(term_colors.BOLD + "Goodbye." + term_colors.ENDC)
-    else:
-        print(f"{TAG_ERR} Authentication failed.")
+        if(i>=2): # if third attempt failed
+            exit(1)
+
+           
+    uid = getuid()
+    print(f"{TAG_INFO} TLSMD running for user", uid)
+    t = threading.Thread(target=queue_worker)
+    t.start()
+    register_watchdog(uid)
+    signal.signal(signal.SIGUSR1, sig_handler) # actually will never be called 
+                                            # but necessary because not binding a handler 
+                                            # exits the program on reception of the signal
+    try:
+        while True:
+            try:
+                info = signal.sigwaitinfo([signal.SIGUSR1])
+                try:
+                    if info.si_pid == 0 and info.si_uid==0: #ensuring the signal has been sent by the kernel
+                        request_queue.put_nowait(info.si_status)
+                except Full:
+                    print(stdout, f"{TAG_WARN} request queue is FULL ! request will be lost !")
+            except InterruptedError:
+                print("We were interrupted!")
+                break
+    except KeyboardInterrupt as e:
+        print(f"{TAG_INFO} received " + str(e))
+        request_queue.shutdown()
+        t.join()
+    
+    print(term_colors.BOLD + "Goodbye." + term_colors.ENDC)
 
 if __name__ == '__main__':
     main()

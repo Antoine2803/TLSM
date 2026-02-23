@@ -35,7 +35,8 @@ struct tlsm_request
     char *subject;
 };
 
-struct tlsm_watchdog {
+struct tlsm_watchdog
+{
     int uid; // watchdog's owern user id
     int pid; // pid of wathdog process
     struct list_head node;
@@ -44,14 +45,21 @@ struct tlsm_watchdog {
 extern struct lsm_blob_sizes tlsm_blob_sizes;
 inline struct tlsm_task_security *get_task_security(struct task_struct *ts);
 
+struct op_stat
+{
+    unsigned long long total;
+    unsigned long long deny;
+};
+
 struct tlsm_task_security
 {
-    /* when changing this struct, adjust tlsm_task_alloc et tlsm_task_free accordingly 
+    /* when changing this struct, adjust tlsm_task_alloc et tlsm_task_free accordingly
        if using pointers to allocated data structures
     */
-    unsigned long long hit_count;
+
     unsigned int score;
 
+    struct op_stat stats[TLSM_OPS_LEN];
 };
 
 extern struct plist *tlsm_policies; // linked list of active policies

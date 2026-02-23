@@ -5,6 +5,8 @@ char **str_split(char *string, const char delimiter, int *out_count);
 struct policy *parse_policy(char *rule);
 void free_karray_from(char **array, int start, int len);
 
+struct fs_answer *parse_answer(char *str);
+
 struct plist *tlsm_plist_new(void);
 int tlsm_plist_add(struct plist *plist, struct policy *policy);
 int tlsm_plist_del(struct plist *plist, int index);
@@ -19,6 +21,6 @@ void signal_watchdog(int uid, int request_number);
 void plist_debug(struct plist *l);
 char *get_exe_path_for_task(struct task_struct *t);
 
-void score_update(unsigned int* score, int delta);
+void score_update(unsigned int *score, int delta);
 
 #endif // _TLSM_UTILS_H

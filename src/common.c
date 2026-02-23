@@ -25,7 +25,7 @@ const char *tlsm_ops2str(tlsm_ops_t op)
 tlsm_ops_t str2tlsm_ops(const char *str)
 {
     int j;
-    for (j = 0; j < sizeof(op2data) / sizeof(op2data[0]); ++j)
+    for (j = 0; j < TLSM_OPS_LEN; ++j)
         if (!strncmp(str, op2data[j].str, strlen(str)))
             return op2data[j].val;
     return TLSM_OP_UNDEFINED;

@@ -7,6 +7,7 @@
 #include "utils.h"
 #include "common.h"
 #include "tlsm.h"
+#include "fs.h"
 
 /**
  * strip - get a substring from string string[start, end]
@@ -170,38 +171,51 @@ struct policy *parse_policy(char *rule)
     new_policy = kmalloc(sizeof(*new_policy), GFP_KERNEL);
     new_policy->hit_count = 0;
 
-    if (!new_policy || word_count < 3)
+    if (!new_policy || word_count < 2)
         goto parse_policy_fail;
 
     tlsm_category_t category = str2tlsm_cat(words[1]);
     kfree(words[1]);
 
-    tlsm_ops_t op = str2tlsm_ops(words[2]);
-    if (op == TLSM_OP_UNDEFINED)
+    if (category != TLSM_ANALYZE)
     {
-        printk(KERN_ERR "[TLSM][ERREUR] cannot parse operation %s", words[2]);
-        goto parse_policy_fail;
+        if (word_count < 3)
+            goto parse_policy_fail;
+
+        tlsm_ops_t op = str2tlsm_ops(words[2]);
+        if (op == TLSM_OP_UNDEFINED)
+        {
+            printk(KERN_ERR "[TLSM][ERREUR] cannot parse operation %s", words[2]);
+            goto parse_policy_fail;
+        }
+        kfree(words[2]);
+
+        int argc = tlsm_op2argc(op);
+        if (word_count < 3 + argc)
+            goto parse_policy_fail;
+
+        switch (argc)
+        {
+        case 1:
+            new_policy->object = words[3];
+            break;
+        default:
+            break;
+        }
+        new_policy->subject = words[0];
+        new_policy->category = category;
+        new_policy->op = op;
+
+        free_karray_from(words, 3 + argc, word_count);
     }
-    kfree(words[2]);
-
-    int argc = tlsm_op2argc(op);
-    if (word_count < 3 + argc)
-        goto parse_policy_fail;
-
-    switch (argc)
+    else if (category == TLSM_ANALYZE)
     {
-    case 1:
-        new_policy->object = words[3];
-        break;
-    default:
-        break;
+        new_policy->subject = words[0];
+        new_policy->category = category;
+        new_policy->op = TLSM_OP_UNDEFINED;
+        new_policy->object = NULL;
+        free_karray_from(words, 2, word_count);
     }
-    new_policy->subject = words[0];
-    new_policy->category = category;
-    new_policy->op = op;
-
-
-    free_karray_from(words, 3 + argc, word_count);
 
     kfree(words);
 
@@ -333,6 +347,44 @@ void signal_watchdog(int uid, int request_number)
     {
         printk(KERN_DEBUG "[TLSM][WATCHDOG] no registered watchdog found");
     }
+}
+
+/**
+ * parse_answer - parse an answer made via the securityFS
+ */
+struct fs_answer *parse_answer(char *str)
+{
+    int word_count;
+    char **words = str_split(str, ' ', &word_count);
+
+    struct fs_answer *res;
+    res = kzalloc(sizeof(*res), GFP_KERNEL);
+    if (unlikely(!res))
+        goto parse_answer_fail;
+
+    int errcode = kstrtoint(words[1], 10, &res->score_delta);
+    if (errcode)
+        goto parse_answer_fail;
+
+    if (strcmp("allow", words[0]) == 0)
+    {
+        res->allow = TLSM_REQ_ALLOW;
+    }
+    else // Assuming deny
+    { 
+        res->allow = TLSM_REQ_DENY;
+    }
+
+    free_karray_from(words, 0, word_count);
+
+    return res;
+
+parse_answer_fail:
+    printk(KERN_DEBUG "[TLSM][ERROR] Parse answer fail.");
+    if (res)
+        kfree(res);
+    free_karray_from(words, 0, word_count);
+    return NULL;
 }
 
 /**
@@ -480,11 +532,11 @@ void plist_debug(struct plist *l)
 char *get_exe_path_for_task(struct task_struct *t)
 {
     char *exe_path = "unknown";
-    char exe_buf[PATH_MAX];
+    char *exe_buf = kzalloc(sizeof(char) * PATH_MAX, GFP_KERNEL);
     struct file *exe_file = get_task_exe_file(t);
     if (exe_file)
     {
-        char *tmp = d_path(&exe_file->f_path, exe_buf, sizeof(exe_buf));
+        char *tmp = d_path(&exe_file->f_path, exe_buf, PATH_MAX);
         if (!IS_ERR(tmp))
             exe_path = tmp;
 
@@ -493,6 +545,7 @@ char *get_exe_path_for_task(struct task_struct *t)
     char *res = kzalloc(strlen(exe_path) + 1, GFP_KERNEL);
     memcpy(res, exe_path, strlen(exe_path) + 1);
 
+    kfree(exe_buf);
     return res;
 }
 
@@ -507,6 +560,7 @@ char *get_exe_path_for_task(struct task_struct *t)
  */
 void score_update(unsigned int *score, int delta)
 {
+    unsigned int old = *score;
     if (delta < 0)
     {
         if (*score > -delta)
@@ -526,4 +580,7 @@ void score_update(unsigned int *score, int delta)
         }
         // else: we have an overflow, do nothing
     }
+
+    printk(KERN_DEBUG "[TLSM][SCORE] update %d + %d -> %d", old, delta, *score);
+
 }

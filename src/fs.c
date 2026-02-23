@@ -17,9 +17,11 @@ struct dentry *tlsm_fs_root = NULL;
 static ssize_t tlsm_read(struct file *file, char __user *buf,
 						 size_t count, loff_t *ppos)
 {
-	const int plen = PATH_MAX;
-	char fpath[plen];
-	char *res = d_path(&file->f_path, fpath, plen);
+	char *fpath = kzalloc(sizeof(char) * PATH_MAX, GFP_KERNEL);
+	if (unlikely(!fpath))
+		return 0;
+
+	char *res = d_path(&file->f_path, fpath, PATH_MAX);
 	printk(KERN_DEBUG "[TLSM][FS] read to file %s, out buff size %lu", res, count);
 
 	int rlen = 0;
@@ -36,8 +38,7 @@ static ssize_t tlsm_read(struct file *file, char __user *buf,
 		while (curr && count - pos)
 		{
 			struct policy *p = curr->policy;
-	
-			int j = scnprintf(&kbuf[pos], count - pos, "rule #%d : %s %s %s %s (hit count %lld)\n", i, tlsm_ops2str(p->op), tlsm_cat2str(p->category), p->subject, p->object, p->hit_count);
+			int j = scnprintf(&kbuf[pos], count - pos, "rule #%d : %s %s %s %s (hit count %lld)\n", i, p->subject, tlsm_cat2str(p->category), tlsm_ops2str(p->op), p->object, p->hit_count);
 			rlen += j;
 			pos += j;
 			i++;
@@ -48,6 +49,8 @@ static ssize_t tlsm_read(struct file *file, char __user *buf,
 	{
 		printk(KERN_DEBUG "[TLSM][ERROR] fs error");
 	}
+
+	kfree(fpath);
 
 	if (*ppos >= rlen || !count)
 	{
@@ -70,7 +73,10 @@ static ssize_t tlsm_read(struct file *file, char __user *buf,
 static ssize_t tlsm_write(struct file *file, const char __user *buf,
 						  size_t count, loff_t *ppos)
 {
-	char fpath[PATH_MAX];
+	char *fpath = kzalloc(sizeof(char) * PATH_MAX, GFP_KERNEL);
+	if (unlikely(!fpath))
+		return count;
+
 	char *res = d_path(&file->f_path, fpath, PATH_MAX);
 	printk(KERN_DEBUG "[TLSM][FS] write to file %s", res);
 
@@ -78,7 +84,10 @@ static ssize_t tlsm_write(struct file *file, const char __user *buf,
 	state = memdup_user_nul(buf, count);
 
 	if (IS_ERR(state))
+	{
+		kfree(fpath);
 		return PTR_ERR(state);
+	}
 
 	if (strncmp((const char *)&file->f_path.dentry->d_iname, "add_policy", 10) == 0 && strlen((const char *)&file->f_path.dentry->d_iname) == 10)
 	{
@@ -143,6 +152,7 @@ static ssize_t tlsm_write(struct file *file, const char __user *buf,
 		printk(KERN_ERR "[TLSM][FS] error, unsupported write op %s", res);
 	}
 
+	kfree(fpath);
 	kfree(state);
 	return count;
 }
@@ -158,7 +168,10 @@ static ssize_t tlsm_req_read(struct file *file, char __user *buf,
 	if (allow_req_fs_op(get_current()))
 		return 0;
 
-	char fpath[PATH_MAX];
+	char *fpath = kzalloc(sizeof(char) * PATH_MAX, GFP_KERNEL);
+	if (unlikely(!fpath))
+		return 0;
+
 	char *res = d_path(&file->f_path, fpath, PATH_MAX);
 	printk(KERN_DEBUG "[TLSM][FS] read to file %s, out buff size %lu", res, count);
 
@@ -172,14 +185,31 @@ static ssize_t tlsm_req_read(struct file *file, char __user *buf,
 
 	if (strncmp((const char *)&file->f_path.dentry->d_iname, "request_", 8) == 0)
 	{
-		int j = scnprintf(&kbuf[pos], count - pos, "%s trying to %s %s\n", req->access_request.subject, tlsm_ops2str(req->access_request.op), req->access_request.object);
-		rlen += j;
-		pos += j;
+		// serialize supervised or not
+		int k = scnprintf(&kbuf[pos], count - pos, "%c %d\n", req->access_request.supervised, req->access_request.score);
+		rlen += k;
+		pos += k;
+
+		// serialize access_request, human-readable format
+		k = scnprintf(&kbuf[pos], count - pos, "%s trying to %s %s\n", req->access_request.subject, tlsm_ops2str(req->access_request.op), req->access_request.object);
+		rlen += k;
+		pos += k;
+		printk(KERN_DEBUG "[TLSM][FS] read buffer content %d out of %zd", rlen, count);
+
+		// serialize op_stat
+		for (int i = 0; i < TLSM_OPS_LEN; i++)
+		{
+			k = scnprintf(&kbuf[pos], count - pos, "%lld %lld\n", req->stats[i].deny, req->stats[i].total);
+			rlen += k;
+			pos += k;
+		}
 	}
 	else
 	{
 		printk(KERN_DEBUG "[TLSM][ERROR] fs error");
 	}
+
+	kfree(fpath);
 
 	if (*ppos >= rlen || !count)
 	{
@@ -214,33 +244,25 @@ static ssize_t tlsm_req_write(struct file *file, const char __user *buf,
 
 	struct fs_request *req = (struct fs_request *)file->f_inode->i_private;
 
-	const int plen = PATH_MAX;
-	char fpath[PATH_MAX];
-	char *res = d_path(&file->f_path, fpath, plen);
-	printk(KERN_DEBUG "[TLSM] write to request file %s", res);
-
-	switch (*state)
+	char *fpath = kzalloc(sizeof(char) * PATH_MAX, GFP_KERNEL);
+	if (unlikely(!fpath))
 	{
-	case '0':
-		req->answer = TLSM_ALLOW;
-		break;
-
-	case '1':
-		req->answer = TLSM_DENY;
-		break;
-
-	default:
-		printk(KERN_ERR "[TLSM][ERROR] Cannot parse anwser %s assuming deny", state);
-		req->answer = TLSM_DENY;
-		break;
+		kfree(state);
+		return count;
 	}
 
+	char *res = d_path(&file->f_path, fpath, PATH_MAX);
+	printk(KERN_DEBUG "[TLSM] write to request file %s", res);
+
+	req->answer = parse_answer(state);
+
 	// wake up lsm hook pending on user response
-	printk(KERN_DEBUG "[TLSM] increasing semaphore");
 	up(&(req->sem));
 
 	if (state)
 		kfree(state);
+
+	kfree(fpath);
 
 	*ppos += count;
 	return count;
@@ -274,7 +296,7 @@ fs_initcall(tlsm_interface_init);
  *
  * Returns the fs_request associated with the created file. Can return NULL
  */
-struct fs_request *create_fs_request(int uid, struct access access_request, int request_number)
+struct fs_request *create_fs_request(int uid, struct access access_request, struct op_stat *stats, int request_number)
 {
 	if (!tlsm_fs_root)
 	{
@@ -293,6 +315,7 @@ struct fs_request *create_fs_request(int uid, struct access access_request, int 
 	req->access_request.op = access_request.op;
 	req->access_request.subject = access_request.subject;
 	req->access_request.object = access_request.object;
+	req->stats = stats;
 	sema_init(&req->sem, 0); // init caller wake-up semaphore
 
 	// convert numbers to string
@@ -365,5 +388,6 @@ void remove_fs_file(struct fs_request *req)
 {
 	printk(KERN_DEBUG "[TLSM][FS] removing file %s", req->request_file->d_iname);
 	securityfs_remove(req->request_file);
+	kfree(req->answer);
 	kfree(req);
 }

@@ -36,16 +36,17 @@ struct list_head tlsm_watchdogs;
 /* these hooks are called on operations */
 static int tlsm_hook_open(struct file *f)
 {
-	const int buflen = PATH_MAX;
-	char buf[PATH_MAX];
-
-	char *res = d_path(&f->f_path, buf, buflen);
+	char *buf = kzalloc(sizeof(char) * PATH_MAX, GFP_KERNEL);
+	char *res = d_path(&f->f_path, buf, PATH_MAX);
 
 	struct access access_request;
 	access_request.op = TLSM_FILE_OPEN;
 	access_request.object = res;
 
-	return autorize_access(access_request);
+	int code = autorize_access(access_request);
+	kfree(buf);
+
+	return code;
 }
 
 static int __tlsm_hook_socket(struct socket *sock, struct sockaddr *address, int addrlen, tlsm_ops_t sock_op)
@@ -108,16 +109,17 @@ static int tlsm_hook_task_kill(struct task_struct *p, struct kernel_siginfo *inf
 static int tlsm_hook_bprm_check_security(struct linux_binprm *bprm)
 {
 
-	char exe_path[PATH_MAX];
-	char *bin_path = get_exe_path_for_task(get_current());
+	char *exe_path = kzalloc(sizeof(char) * PATH_MAX, GFP_KERNEL);
 	char *res = d_path(&bprm->file->f_path, exe_path, PATH_MAX);
 
 	struct access access_request;
 	access_request.op = TLSM_EXECVE;
 	access_request.object = res;
 
-	kfree(bin_path);
-	return autorize_access(access_request);
+	int code = autorize_access(access_request);
+	kfree(exe_path);
+
+	return code;
 }
 
 /* TLSM security hooks */
