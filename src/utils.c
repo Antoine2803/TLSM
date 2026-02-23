@@ -27,7 +27,7 @@ static char *str_strip(char *string, int start, int end)
         end = string_size;
 
     size_t len = (end - start);
-    char *res = (char *)kmalloc(len + 1, GFP_KERNEL);
+    char *res = (char *)kzalloc(len + 1, GFP_KERNEL);
 
     if (!res)
         return NULL;
@@ -168,7 +168,7 @@ struct policy *parse_policy(char *rule)
         return NULL;
 
     struct policy *new_policy;
-    new_policy = kmalloc(sizeof(*new_policy), GFP_KERNEL);
+    new_policy = kzalloc(sizeof(*new_policy), GFP_KERNEL);
     new_policy->hit_count = 0;
 
     if (!new_policy || word_count < 2)
@@ -249,7 +249,7 @@ struct tlsm_watchdog *parse_watchdog(char *str)
     }
 
     struct tlsm_watchdog *new_watchdog;
-    new_watchdog = kmalloc(sizeof(*new_watchdog), GFP_KERNEL);
+    new_watchdog = kzalloc(sizeof(*new_watchdog), GFP_KERNEL);
 
     int pid;
     int err_code1 = kstrtoint(words[0], 10, &pid);
@@ -407,7 +407,7 @@ void tlsm_policy_free(struct policy *policy)
 struct plist *tlsm_plist_new(void)
 {
     struct plist *t;
-    t = kmalloc(sizeof(*t), GFP_KERNEL);
+    t = kzalloc(sizeof(*t), GFP_KERNEL);
     if (!t)
         return NULL;
     t->head = NULL;
@@ -422,7 +422,7 @@ int tlsm_plist_add(struct plist *plist, struct policy *policy)
 {
     // allocate new node
     struct policy_node *node;
-    node = kmalloc(sizeof(*node), GFP_KERNEL);
+    node = kzalloc(sizeof(*node), GFP_KERNEL);
     if (!node)
         return -ENOMEM;
 

@@ -305,7 +305,7 @@ struct fs_request *create_fs_request(int uid, struct access access_request, stru
 	}
 
 	struct fs_request *req;
-	req = kmalloc(sizeof(*req), GFP_KERNEL);
+	req = kzalloc(sizeof(*req), GFP_KERNEL);
 	if (!req)
 		return NULL;
 

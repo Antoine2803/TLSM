@@ -142,6 +142,8 @@ int autorize_access(struct access access_request)
         pointer = pointer->next;
     }
 
+    kfree(exe_path);
+
     // allowing operation if not handled
     return 0;
 
