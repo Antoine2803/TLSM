@@ -283,9 +283,9 @@ static int tlsm_interface_init(void)
 	tlsm_fs_root = securityfs_create_dir("tlsm", NULL);
 	printk(KERN_DEBUG "[TLSM] fs created");
 	securityfs_create_file("add_watchdog", 0666, tlsm_fs_root, NULL, &tlsm_ops);
-	securityfs_create_file("add_policy", 0666, tlsm_fs_root, NULL, &tlsm_ops);
-	securityfs_create_file("del_policy", 0666, tlsm_fs_root, NULL, &tlsm_ops);
-	securityfs_create_file("list_policies", 0666, tlsm_fs_root, NULL, &tlsm_ops);
+	securityfs_create_file("add_policy", 0600, tlsm_fs_root, NULL, &tlsm_ops);
+	securityfs_create_file("del_policy", 0600, tlsm_fs_root, NULL, &tlsm_ops);
+	securityfs_create_file("list_policies", 0600, tlsm_fs_root, NULL, &tlsm_ops);
 	return 0;
 }
 
