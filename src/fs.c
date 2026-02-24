@@ -186,7 +186,7 @@ static ssize_t tlsm_req_read(struct file *file, char __user *buf,
 	if (strncmp((const char *)&file->f_path.dentry->d_iname, "request_", 8) == 0)
 	{
 		// serialize supervised or not
-		int k = scnprintf(&kbuf[pos], count - pos, "%c %d\n", req->access_request.supervised, req->access_request.score);
+		int k = scnprintf(&kbuf[pos], count - pos, "%hd %d\n", req->access_request.supervised, req->access_request.score);
 		rlen += k;
 		pos += k;
 
@@ -312,9 +312,7 @@ struct fs_request *create_fs_request(int uid, struct access access_request, stru
 	printk(KERN_DEBUG "[TLSM][FS] creating request file for uid %d, request %d", uid, request_number);
 
 	req->number = request_number;
-	req->access_request.op = access_request.op;
-	req->access_request.subject = access_request.subject;
-	req->access_request.object = access_request.object;
+	memcpy(&req->access_request, &access_request, sizeof(struct access));
 	req->stats = stats;
 	sema_init(&req->sem, 0); // init caller wake-up semaphore
 

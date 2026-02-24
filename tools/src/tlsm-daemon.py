@@ -85,7 +85,7 @@ def answer_request(path, value, score_delta):
         f = open(path, 'w')
         f.write(f"{value} {score_delta}")
         f.close()
-        if value == '1':
+        if value != ALLOW_STR:
             print(f"{TAG_REQD} DENYING REQUEST")
         else:
             print(f"{TAG_REQ} ALLOWING REQUEST")
@@ -94,8 +94,12 @@ def answer_request(path, value, score_delta):
 
 def analyze_request(req_str: str, stats: Stats, score: int):
     print("perform autonomous analysis of request / malware detection / classification model here")
-    return DENY_STR # deny
+    if(score < 50):
+        return (DENY_STR, 0) # deny
+    else:
+        return (ALLOW_STR, -10)
 
+        
 def process_request(path):
     print(f"{TAG_REQ} Got request: ", path)
     try:
@@ -103,11 +107,12 @@ def process_request(path):
         req_str_list = f.read().strip('\n').split('\n')
         f.close()
         
-        supervized = bool(req_str_list[0].split(" ")[0])
+        supervized = req_str_list[0].split(" ")[0] == '1'
+        print(req_str_list)
         score = int(req_str_list[0].split(" ")[1])
         req_str = req_str_list[1]
         stats = Stats([[int(i) for i in d.split(" ")] for d in req_str_list[2:]])
-        print(term_colors.BOLD + "-> " + req_str + f"(score: {score})" + term_colors.ENDC)
+        print(term_colors.BOLD + "-> " + req_str + f" (score: {score})" + term_colors.ENDC)
         print(stats)
 
         answer = DENY_STR
@@ -127,8 +132,7 @@ def process_request(path):
                     print(f"{TAG_ERR} Failed to parse provided score.")
 
         else: # ask the machine
-            answer = analyze_request(req_str, stats, score)
-            pass
+            (answer, score_delta) = analyze_request(req_str, stats, score)
 
         answer_request(path, answer, score_delta)
 

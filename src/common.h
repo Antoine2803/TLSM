@@ -7,6 +7,7 @@ typedef enum tlsm_category
     TLSM_DENY,
     TLSM_ASK,
     TLSM_ANALYZE,
+    TLSM_UNDEFINED,
 } tlsm_category_t;
 
 static const struct
@@ -18,7 +19,7 @@ static const struct
     {TLSM_DENY, "deny"},
     {TLSM_ASK, "ask"},
     {TLSM_ANALYZE, "analyze"},
-
+    {TLSM_UNDEFINED, "undefined"},
 };
 
 const char *tlsm_cat2str(tlsm_category_t op);

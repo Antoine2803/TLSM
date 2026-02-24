@@ -175,10 +175,19 @@ struct policy *parse_policy(char *rule)
         goto parse_policy_fail;
 
     tlsm_category_t category = str2tlsm_cat(words[1]);
-    kfree(words[1]);
 
-    if (category != TLSM_ANALYZE)
+    if (category == TLSM_UNDEFINED) {
+            goto parse_policy_fail;
+    }
+    else if (category == TLSM_ANALYZE)
     {
+        new_policy->subject = words[0];
+        new_policy->category = category;
+        new_policy->op = TLSM_OP_UNDEFINED;
+        new_policy->object = NULL;
+        free_karray_from(words, 2, word_count);
+    }
+    else {
         if (word_count < 3)
             goto parse_policy_fail;
 
@@ -208,15 +217,8 @@ struct policy *parse_policy(char *rule)
 
         free_karray_from(words, 3 + argc, word_count);
     }
-    else if (category == TLSM_ANALYZE)
-    {
-        new_policy->subject = words[0];
-        new_policy->category = category;
-        new_policy->op = TLSM_OP_UNDEFINED;
-        new_policy->object = NULL;
-        free_karray_from(words, 2, word_count);
-    }
 
+    kfree(words[1]);
     kfree(words);
 
     return new_policy;
