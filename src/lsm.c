@@ -96,14 +96,25 @@ static int tlsm_hook_sconnect(struct socket *sock, struct sockaddr *address, int
  */
 static int tlsm_hook_task_kill(struct task_struct *p, struct kernel_siginfo *info, int sig, const struct cred *cred)
 {
+	if (!sig) // SIG_NULL
+		return 0;
+	if (cred) // USB IO Comment
+		return 0;
 
-	// struct access access_request;
-	// access_request.op = TLSM_SIGNAL;
-	// access_request.object = get_exe_path_for_task(p);
+	// Ignorer les threads kernel
+	if (!(current->mm))
+		return 0;
 
-	// return autorize_access(access_request);
+	if (info && info->si_pid == 0 && info->si_uid == 0)
+	{ // if info avaliable and signal has been sent by kernel / admin / init -> allow by default
+		return 0;
+	}
 
-	return 0;
+	struct access access_request;
+	access_request.op = TLSM_SIGNAL;
+	access_request.object = get_exe_path_for_task(p);
+
+	return autorize_access(access_request);
 }
 
 static int tlsm_hook_bprm_check_security(struct linux_binprm *bprm)

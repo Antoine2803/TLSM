@@ -485,6 +485,7 @@ int tlsm_plist_del(struct plist *plist, int index)
             return 0;
         }
         // curr = tail->next, nothing to do
+
     }
     // else : failed to find target node
     return -1;
@@ -533,21 +534,26 @@ void plist_debug(struct plist *l)
  */
 char *get_exe_path_for_task(struct task_struct *t)
 {
-    char *exe_path = "unknown";
+    char* exe_path = "unknown";
+    char *res = NULL;
     char *exe_buf = kzalloc(sizeof(char) * PATH_MAX, GFP_KERNEL);
+    
     struct file *exe_file = get_task_exe_file(t);
-    if (exe_file)
+    
+
+    if (exe_file && exe_buf)
     {
         char *tmp = d_path(&exe_file->f_path, exe_buf, PATH_MAX);
         if (!IS_ERR(tmp))
             exe_path = tmp;
 
         fput(exe_file);
-    }
-    char *res = kzalloc(strlen(exe_path) + 1, GFP_KERNEL);
-    memcpy(res, exe_path, strlen(exe_path) + 1);
-
-    kfree(exe_buf);
+        res = kzalloc(strlen(exe_path) + 1, GFP_KERNEL);
+        if(res) {
+            memcpy(res, exe_path, strlen(exe_path) + 1);
+            kfree(exe_buf);
+        }
+    } 
     return res;
 }
 
