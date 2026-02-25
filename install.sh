@@ -19,6 +19,7 @@ ssh -p 60022 $VMHOST "cd /tmp && sudo pacman -U --noconfirm $PKG2"
 
 popd || exit
 
+scp -P 60022 -r tests $VMHOST:/home/arch/
 
 ssh -p 60022 $VMHOST "sudo grub-mkconfig -o /boot/grub/grub.cfg"
 ssh -p 60022 $VMHOST "sudo reboot"

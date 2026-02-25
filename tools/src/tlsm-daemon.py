@@ -102,7 +102,7 @@ def analyze_request(req_str: str, stats: Stats, score: int):
     if(score < 50):
         return (DENY_STR, 0) # deny
     else:
-        return (ALLOW_STR, -10)
+        return (ALLOW_STR, -5)
 
         
 def process_request(path):
@@ -113,7 +113,6 @@ def process_request(path):
         f.close()
         
         supervized = req_str_list[0].split(" ")[0] == '1'
-        print(req_str_list)
         score = int(req_str_list[0].split(" ")[1])
         req_str = req_str_list[1]
         stats = Stats([[int(i) for i in d.split(" ")] for d in req_str_list[2:]])
