@@ -34,7 +34,11 @@ class Stats:
     def __str__(self):
         acc = ""
         for op in TLSM_OPS:
-            acc += " - " + op.name + " : " + str(self.stats[op])
+            t = self.stats[op]
+            ratio=0
+            if t[1] != 0:
+                ratio = 100 * (t[0] / t[1])
+            acc += " - " + op.name + " : " + str(self.stats[op]) + f" ({int(ratio)}% denied)"
             acc += "\n"
         return acc.strip("\n")
 
@@ -65,7 +69,8 @@ def send_notify(req_str: str):
     try:
         subprocess.run(["/usr/bin/notify-send", 
                     "--app-name=TLSMD",
-                    "--icon=info", 
+                    "--icon=info",
+                    "--expire-time=1000", 
                     "Your attention is required :\n" + req_str])
     except Exception as e:
         print(f"{TAG_WARN} libnotify failed. cannot send desktop notification. ({e})")
@@ -144,20 +149,18 @@ def request_scan(user_request_fpath):
     for f in files:
         print("Found request file", f)
         try:
-            request_queue.put_nowait(f)
+            request_queue.put_nowait(f.rsplit("_", 1)[1])
         except Full:
-            print(f"{TAG_WARN} Request queue is full. request will be dropped")
+            print(f"{TAG_WARN} Request queue is full. Requests will be dropped")
 
 def sig_handler(signum, frame):
     write(stdout.fileno(), b"[ERROR] Oops, something went wrong. This handler shouldn't have been called")
 
-def watchdog(uid: int):
-    while True:
-        if isdir(USER_REQUEST_PATH):
-            request_scan(USER_REQUEST_PATH)
-        else:
-            print(f"{TAG_WARN} tlsmd: {USER_REQUEST_PATH} folder does not exist yet")
-        sleep(5) # busy-wait relief
+def fs_scan(uid: int):
+    if isdir(USER_REQUEST_PATH):
+        request_scan(USER_REQUEST_PATH)
+    else:
+        print(f"{TAG_WARN} tlsmd: {USER_REQUEST_PATH} folder does not exist yet")
 
 def queue_worker():
     while not request_queue.is_shutdown:
@@ -192,6 +195,7 @@ def main():
     signal.signal(signal.SIGUSR1, sig_handler) # actually will never be called 
                                             # but necessary because not binding a handler 
                                             # exits the program on reception of the signal
+    fs_scan(uid) # scan for pending requests fired before tlsmd was up
     try:
         while True:
             try:
