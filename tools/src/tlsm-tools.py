@@ -1,6 +1,6 @@
 #!/usr/bin/python
 
-from os import mkdir
+from os import mkdir, getuid
 from os.path import join
 from sys import argv
 
@@ -24,7 +24,7 @@ TAG_POLD = term_colors.BOLD + term_colors.WARNING + "[POL]" + term_colors.ENDC
 MAIN_FOLDER="/etc/tlsm/"
 POLICIES_DB="policies.conf"
 
-policies_path = join(MAIN_FOLDER, POLICIES_DB)
+DEF_POLICY_PATH = join(MAIN_FOLDER, POLICIES_DB)
 
 SYSFS_ROOT = "/sys/kernel/security/tlsm/"
 SYSFS_ADD = join(SYSFS_ROOT, "add_policy")
@@ -37,24 +37,30 @@ def create_folders():
 def add_policy(policy: str):
     try:
         f = open(SYSFS_ADD, "w")
-        print(f"{TAG_POL} Installing policy :", policy)
         f.write(policy)
         f.close()
-    except OSError:
-        print(f"{TAG_ERR} Failed to open", SYSFS_ADD, " - Is TLSM loaded ?")
-        return -1
+        print(f"{TAG_POL} Installing policy :", policy)
+    except OSError as e:
+        if e.errno:
+            print(f"{TAG_ERR} Policy Syntax Error - Policy parsing failed in TLSM")
+        else:
+            print(f"{TAG_ERR} Failed to open", SYSFS_ADD, " - Is TLSM loaded ?")
+
 
 def remove_policy(index: int):
     assert(index >= 0)
     try:
         f = open(SYSFS_DEL, "w")
-        print(f"{TAG_POLD}Removing policy at index :", index)
         f.write(str(index))
         f.close()
-    except OSError:
-        print(f"{TAG_ERR} Failed to open", SYSFS_ADD, " - Is TLSM loaded ?")
-        return -1
-    
+        print(f"{TAG_POLD} Removing policy at index :", index)
+    except OSError as e:
+        if e.errno:
+            print(f"{TAG_ERR} Policy Index Error - Invalid policy index {index}")
+        else:
+            print(f"{TAG_ERR} Failed to open", SYSFS_ADD, " - Is TLSM loaded ?")
+
+
 def flush_policies():
     print(f"{TAG_INFO} Removing all policies")
     lines = 0
@@ -67,7 +73,7 @@ def flush_policies():
         f.flush()
     f.close()
 
-def apply_policies():
+def apply_policies(policies_path=DEF_POLICY_PATH):
     print(f"{TAG_INFO} Loading policies from", policies_path)
     try:
         policies = open(policies_path, "r")
@@ -101,9 +107,16 @@ def print_help():
     print("Policy example : python ask bind 192.168.1.1")
 
 if __name__=="__main__":
+    if getuid() != 0:
+        print(f"{TAG_ERR} This tool must be run as root !")
+        exit(1)
+
     if len(argv) > 1:
         if argv[1] == "apply" or argv[1] == "a":
-            apply_policies()
+            if len(argv) == 3:
+                apply_policies(argv[2])
+            else:
+                apply_policies()
         elif argv[1] == "list":
             list_policies()
         elif argv[1] == "flush":
@@ -116,8 +129,11 @@ if __name__=="__main__":
                 print_help()
         elif argv[1] == "del":
             if len(argv) == 3:
-                index = int(argv[2])
-                remove_policy(index)
+                try:
+                    index = int(argv[2])
+                    remove_policy(index)
+                except ValueError:
+                    print(f"{TAG_ERR} Index should be a valid integer.")
             else:
                 print_help()
         else:

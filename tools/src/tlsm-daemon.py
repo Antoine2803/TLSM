@@ -117,7 +117,7 @@ def process_request(path):
         req_str = req_str_list[1]
         stats = Stats([[int(i) for i in d.split(" ")] for d in req_str_list[2:]])
         print(term_colors.BOLD + "-> " + req_str + f" (score: {score})" + term_colors.ENDC)
-        print(stats)
+        # print(stats)
 
         answer = DENY_STR
         score_delta = 0

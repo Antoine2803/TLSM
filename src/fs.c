@@ -29,6 +29,11 @@ static ssize_t tlsm_read(struct file *file, char __user *buf,
 
 	char *kbuf;
 	kbuf = memdup_user_nul(buf, count);
+	if (IS_ERR(kbuf))
+	{
+		kfree(fpath);
+		return PTR_ERR(kbuf);
+	}
 
 	if (strncmp((const char *)&file->f_path.dentry->d_iname, "list_policies", 13) == 0 && strlen((const char *)&file->f_path.dentry->d_iname) == 13)
 	{
@@ -98,6 +103,9 @@ static ssize_t tlsm_write(struct file *file, const char __user *buf,
 		if (p == NULL)
 		{
 			printk(KERN_ERR "[TLSM][FS] cannot create policy");
+			kfree(fpath);
+			kfree(state);
+			return -EINVAL;
 		}
 		else
 		{
@@ -125,11 +133,17 @@ static ssize_t tlsm_write(struct file *file, const char __user *buf,
 			if (tlsm_plist_del(tlsm_policies, target) != 0)
 			{
 				printk(KERN_ERR "[TLSM][FS][ERROR] no existing rule at index %d", target);
+				kfree(fpath);
+				kfree(state);
+				return -EINVAL;
 			}
 		}
 		else
 		{
 			printk(KERN_ERR "[TLSM][FS] failed to parse policy index, error %d", ret);
+			kfree(fpath);
+			kfree(state);
+			return -EINVAL;
 		}
 	}
 	else if (strncmp((const char *)&file->f_path.dentry->d_iname, "add_watchdog", 12) == 0 && strlen((const char *)&file->f_path.dentry->d_iname) == 12)
@@ -180,6 +194,11 @@ static ssize_t tlsm_req_read(struct file *file, char __user *buf,
 
 	char *kbuf;
 	kbuf = memdup_user_nul(buf, count);
+	if (IS_ERR(kbuf))
+	{
+		kfree(fpath);
+		return PTR_ERR(kbuf);
+	}
 
 	struct fs_request *req = (struct fs_request *)file->f_inode->i_private;
 
@@ -241,6 +260,10 @@ static ssize_t tlsm_req_write(struct file *file, const char __user *buf,
 
 	char *state;
 	state = memdup_user_nul(buf, count);
+	if (IS_ERR(state))
+	{
+		return PTR_ERR(state);
+	}
 
 	struct fs_request *req = (struct fs_request *)file->f_inode->i_private;
 

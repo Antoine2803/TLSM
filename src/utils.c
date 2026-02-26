@@ -170,38 +170,42 @@ struct policy *parse_policy(char *rule)
     struct policy *new_policy;
     new_policy = kzalloc(sizeof(*new_policy), GFP_KERNEL);
     new_policy->hit_count = 0;
+    new_policy->object = NULL;
 
     if (!new_policy || word_count < 2)
         goto parse_policy_fail;
 
     tlsm_category_t category = str2tlsm_cat(words[1]);
 
-    if (category == TLSM_UNDEFINED) {
-            goto parse_policy_fail;
+    if (category == TLSM_UNDEFINED)
+    {
+        goto parse_policy_fail;
     }
     else if (category == TLSM_ANALYZE)
     {
         new_policy->subject = words[0];
         new_policy->category = category;
         new_policy->op = TLSM_OP_UNDEFINED;
-        new_policy->object = NULL;
         free_karray_from(words, 2, word_count);
     }
-    else {
+    else
+    {
         if (word_count < 3)
             goto parse_policy_fail;
 
         tlsm_ops_t op = str2tlsm_ops(words[2]);
         if (op == TLSM_OP_UNDEFINED)
         {
-            printk(KERN_ERR "[TLSM][ERREUR] cannot parse operation %s", words[2]);
+            printk(KERN_ERR "[TLSM][ERROR] cannot parse operation %s", words[2]);
             goto parse_policy_fail;
         }
-        kfree(words[2]);
 
         int argc = tlsm_op2argc(op);
         if (word_count < 3 + argc)
-            goto parse_policy_fail;
+        {
+            printk(KERN_ERR "[TLSM][ERROR] not enough paramters for policy (got %d out of %d required)", word_count, 3+argc);
+             goto parse_policy_fail;
+        }
 
         switch (argc)
         {
@@ -214,7 +218,7 @@ struct policy *parse_policy(char *rule)
         new_policy->subject = words[0];
         new_policy->category = category;
         new_policy->op = op;
-
+        kfree(words[2]);
         free_karray_from(words, 3 + argc, word_count);
     }
 
@@ -373,7 +377,7 @@ struct fs_answer *parse_answer(char *str)
         res->allow = TLSM_REQ_ALLOW;
     }
     else // Assuming deny
-    { 
+    {
         res->allow = TLSM_REQ_DENY;
     }
 
@@ -485,7 +489,6 @@ int tlsm_plist_del(struct plist *plist, int index)
             return 0;
         }
         // curr = tail->next, nothing to do
-
     }
     // else : failed to find target node
     return -1;
@@ -534,12 +537,11 @@ void plist_debug(struct plist *l)
  */
 char *get_exe_path_for_task(struct task_struct *t)
 {
-    char* exe_path = "unknown";
+    char *exe_path = "unknown";
     char *res = NULL;
     char *exe_buf = kzalloc(sizeof(char) * PATH_MAX, GFP_KERNEL);
-    
+
     struct file *exe_file = get_task_exe_file(t);
-    
 
     if (exe_file && exe_buf)
     {
@@ -549,11 +551,12 @@ char *get_exe_path_for_task(struct task_struct *t)
 
         fput(exe_file);
         res = kzalloc(strlen(exe_path) + 1, GFP_KERNEL);
-        if(res) {
+        if (res)
+        {
             memcpy(res, exe_path, strlen(exe_path) + 1);
             kfree(exe_buf);
         }
-    } 
+    }
     return res;
 }
 
@@ -590,5 +593,4 @@ void score_update(unsigned int *score, int delta)
     }
 
     printk(KERN_DEBUG "[TLSM][SCORE] update %d + %d -> %d", old, delta, *score);
-
 }
