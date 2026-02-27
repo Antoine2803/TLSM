@@ -65,13 +65,15 @@ USER_REQUEST_PATH = join(SYSFS_ROOT, "user_" + str(getuid()))
 
 request_queue = Queue()
 
+notify=True
+
 def send_notify(req_str: str):
     try:
         subprocess.run(["/usr/bin/notify-send", 
                     "--app-name=TLSMD",
                     "--icon=info",
                     "--expire-time=1000", 
-                    "Your attention is required :\n" + req_str])
+                    "TLSMD requires your attention :\n" + req_str])
     except Exception as e:
         print(f"{TAG_WARN} libnotify failed. cannot send desktop notification. ({e})")
 
@@ -122,7 +124,8 @@ def process_request(path):
         answer = DENY_STR
         score_delta = 0
         if supervized: # ask the human
-            send_notify(req_str)
+            if notify:
+                send_notify(req_str)
             termios.tcflush(stdin, termios.TCIOFLUSH) # flush stdin before input
             answer = input(f"{term_colors.BOLD}Allow ? y/n{term_colors.ENDC}: ")
             answer = ALLOW_STR if answer in ['y', 'Y', ''] else DENY_STR
@@ -175,6 +178,11 @@ def auth():
     return pam.authenticate(username, password)
 
 def main():
+
+    if "--no-notif" in argv:
+        global notify
+        notify = False
+        print(f"{TAG_INFO} Dekstop notification disabled")
 
     for i in range(3):
         if(auth()):

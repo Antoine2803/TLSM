@@ -15,7 +15,7 @@
  * Return: the substring
  */
 static char *str_strip(char *string, int start, int end)
-{
+{ 
     if (!string || start < 0 || start > end)
         return NULL;
 

@@ -96,8 +96,8 @@ def apply_policies(policies_path=DEF_POLICY_PATH):
 
 def list_policies():
     f = open(SYSFS_LIST, "r")
-    for p in f.readlines():
-        print(p, end="")
+    while t := f.read():
+        print(t, end="")
     f.close()
 
 def print_help():

@@ -1,5 +1,9 @@
 # TLSM
 
+## About
+TLSM is a Linux Kernel Security Module.
+This project is out first attempt at both kernel security and kernel programming.
+
 ## VM
 Deploy our test environement. Based on QEMU running arch-boxes images, with an overlayfs to speed up iteration.
 Usage: `./vm.sh <base?> <reset>`
@@ -12,6 +16,6 @@ Also builds the userland tools.
 `time ./build.sh > >(tee build.log) 2> >(tee build.err >&2)`
 
 ## Install
-Install our kernels and userland tools to a running VM.
+Install our kernels and userland tools (+some testing scripts) to a running VM.
 `./install.sh`
 

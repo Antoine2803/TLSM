@@ -14,6 +14,8 @@
 
 struct dentry *tlsm_fs_root = NULL;
 
+unsigned long long last_read = 0;
+
 static ssize_t tlsm_read(struct file *file, char __user *buf,
 						 size_t count, loff_t *ppos)
 {
@@ -39,25 +41,44 @@ static ssize_t tlsm_read(struct file *file, char __user *buf,
 	{
 		printk(KERN_DEBUG "[TLSM][FS] read list_policies request (count=%zd, pos=%ld)", count, pos);
 		struct policy_node *curr = tlsm_policies->head;
-		int i = 0;
-		while (curr && count - pos)
+
+		// select if this is a new read from the beginning
+		// or the continuation of a previous read
+		unsigned long long i = 0;
+		if (pos > 0)
+		{
+			i = last_read;
+		}
+		else
+		{
+			last_read = 0;
+		}
+
+		// seek to last read policy
+		for (unsigned long long j = 0; j < i; j++)
+		{
+			if (curr)
+				curr = curr->next;
+		}
+
+		while (curr && count - rlen > 512)
 		{
 			struct policy *p = curr->policy;
-			int j = scnprintf(&kbuf[pos], count - pos, "rule #%d : %s %s %s %s (hit count %lld)\n", i, p->subject, tlsm_cat2str(p->category), tlsm_ops2str(p->op), p->object, p->hit_count);
+			int j = scnprintf(&kbuf[rlen], count - rlen, "rule #%lld : %s %s %s %s (hit count %lld)\n", i, p->subject, tlsm_cat2str(p->category), tlsm_ops2str(p->op), p->object, p->hit_count);
 			rlen += j;
-			pos += j;
 			i++;
 			curr = curr->next;
 		}
+		last_read = i;
 	}
 	else
 	{
-		printk(KERN_DEBUG "[TLSM][ERROR] fs error");
+		printk(KERN_DEBUG "[TLSM][ERROR] fs error - cannot read this file");
 	}
 
 	kfree(fpath);
 
-	if (*ppos >= rlen || !count)
+	if (rlen == 0 || !count)
 	{
 		kfree(kbuf);
 		return 0;
@@ -82,9 +103,6 @@ static ssize_t tlsm_write(struct file *file, const char __user *buf,
 	if (unlikely(!fpath))
 		return count;
 
-	char *res = d_path(&file->f_path, fpath, PATH_MAX);
-	printk(KERN_DEBUG "[TLSM][FS] write to file %s", res);
-
 	char *state;
 	state = memdup_user_nul(buf, count);
 
@@ -96,8 +114,6 @@ static ssize_t tlsm_write(struct file *file, const char __user *buf,
 
 	if (strncmp((const char *)&file->f_path.dentry->d_iname, "add_policy", 10) == 0 && strlen((const char *)&file->f_path.dentry->d_iname) == 10)
 	{
-		printk(KERN_DEBUG "[TLSM][FS][ADD_RULE] %s.", state);
-
 		struct policy *p = parse_policy(state);
 
 		if (p == NULL)
@@ -163,6 +179,7 @@ static ssize_t tlsm_write(struct file *file, const char __user *buf,
 	}
 	else
 	{
+		char *res = d_path(&file->f_path, fpath, PATH_MAX);
 		printk(KERN_ERR "[TLSM][FS] error, unsupported write op %s", res);
 	}
 
