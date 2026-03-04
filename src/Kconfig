@@ -14,3 +14,11 @@ config SECURITY_TLSM_WATCHDOG
         help
             This is the default pathname of the userland companion program
             to be used when using the interactive mode (the watchdog).
+
+config SECURITY_TLSM_REQTIMEOUT
+        int "Default request timeout"
+        default 42 
+        depends on SECURITY_TLSM
+        help
+            This is the default timeout duration for request when using
+            the interactive mode (both supervised and unsupervised).

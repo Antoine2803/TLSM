@@ -16,7 +16,7 @@
 #include "utils.h"
 #include "access.h"
 
-int request_timeout = 20;
+int request_timeout = CONFIG_SECURITY_TLSM_REQTIMEOUT;
 module_param(request_timeout, int, S_IRUGO);
 MODULE_PARM_DESC(request_timeout, "TLSM interactive request timeout");
 
